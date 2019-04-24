@@ -231,8 +231,8 @@ def create_model() -> Any:
     model = torch.nn.DataParallel(model).cuda()
     model.cuda()
 
-    if torch.cuda.device_count() == 1:
-        torchsummary.summary(model, (3, opt.MODEL.INPUT_SIZE, opt.MODEL.INPUT_SIZE))
+    # if torch.cuda.device_count() == 1:
+    #     torchsummary.summary(model, (3, opt.MODEL.INPUT_SIZE, opt.MODEL.INPUT_SIZE))
 
     return model
 
@@ -292,7 +292,7 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.tensor, torch.tensor,
     ''' Returns predictions and targets, if any. '''
     model.eval()
 
-    activation = nn.Softmax()
+    activation = nn.Softmax(dim=1)
     all_predicts, all_confs, all_targets = [], [], []
 
     with torch.no_grad():
@@ -321,9 +321,9 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.tensor, torch.tensor,
             if target is not None:
                 all_targets.append(target)
 
-    predicts = torch.concat(all_predicts)
-    confs = torch.concat(all_confs)
-    targets = torch.concat(all_targets)
+    predicts = torch.cat(all_predicts)
+    confs = torch.cat(all_confs)
+    targets = torch.cat(all_targets)
 
     return predicts, confs, targets
 

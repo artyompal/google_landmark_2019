@@ -61,7 +61,7 @@ class Dataset(data.Dataset):
             assert class_idx >= 0 and class_idx < self.num_classes
             filename = np.random.choice(self.samples[class_idx])
         else:
-            filename = self.df.iloc[index, 0]
+            filename = self.df.id.values[index]
 
         sample = Image.open(os.path.join(self.path, filename + '.jpg'))
         assert sample.mode == 'RGB'
@@ -87,7 +87,7 @@ class Dataset(data.Dataset):
         elif self.mode == 'train':
             return image, class_idx
         else:
-            return image, self.df.iloc[index, 1]
+            return image, self.df.landmark_id.values[index]
 
     def __len__(self) -> int:
         count = self.df.shape[0]
