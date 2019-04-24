@@ -53,7 +53,7 @@ opt.TRAIN.VAL_SAMPLES = 100000
 opt.TRAIN.IMAGES_PER_CLASS = 2
 opt.TRAIN.STEPS_PER_EPOCH = 30000
 
-opt.TRAIN.SPLITS_FILE = 'splits.pkl'
+opt.TRAIN.SPLITS_FILE = '../cache/splits.pkl'
 opt.TRAIN.NUM_FOLDS = 5
 opt.TRAIN.BATCH_SIZE = 128 * torch.cuda.device_count()
 opt.TRAIN.LOSS = 'CE'
@@ -262,8 +262,8 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
         loss = criterion(output, target.cuda())
 
         # get metric
-        confs, predicts = torch.max(output, dim=1)
-        avg_score.update(GAP(predicts, confs, target, threshold).item())
+        confs, predicts = torch.max(output.detach(), dim=1)
+        avg_score.update(GAP(predicts, confs, target, threshold))
 
         # compute gradient and do SGD step
         losses.update(loss.data.item(), input_.size(0))
@@ -334,7 +334,7 @@ def validate(val_loader: Any, model: Any, epoch: int) -> float:
 
     predicts, confs, targets = inference(val_loader, model)
     threshold = 0.1
-    score = GAP(predicts, confs, targets, threshold).item()
+    score = GAP(predicts, confs, targets, threshold)
 
     logger.info(f'{epoch} GAP {score:.4f}')
     logger.info(f' * GAP on validation {score:.4f}')

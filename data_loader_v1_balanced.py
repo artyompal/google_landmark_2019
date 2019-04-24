@@ -36,7 +36,16 @@ class Dataset(data.Dataset):
         self.augmentor = augmentor
 
         if mode == 'train':
-            self.samples = [images.id.values for _, images in tqdm(self.df.groupby('landmark_id'))]
+            cache_path = '../cache/dataset.pickle'
+
+            if not os.path.exists(cache_path):
+                self.samples = [images.id.values for _, images in tqdm(self.df.groupby('landmark_id'))]
+                with open(cache_path, 'wb') as f:
+                    pickle.dump(self.samples, f)
+            else:
+                with open(cache_path, 'rb') as f:
+                    self.samples = pickle.load(f)
+
             assert len(self.samples) == self.num_classes
 
         self.transforms = transforms.Compose([
@@ -54,7 +63,7 @@ class Dataset(data.Dataset):
         else:
             filename = self.df.iloc[index, 0]
 
-        sample = Image.open(os.path.join(self.path, filename + '.png'))
+        sample = Image.open(os.path.join(self.path, filename + '.jpg'))
         assert sample.mode == 'RGB'
 
         image = np.array(sample)

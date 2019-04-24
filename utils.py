@@ -66,11 +66,11 @@ def GAP(predicts: torch.tensor, confs: torch.tensor, targets: torch.tensor,
 
     assert predicts.shape == confs.shape and confs.shape == targets.shape
 
-    sorted_confs, indices = torch.sort(confs, dim=1, descending=True)
+    sorted_confs, indices = torch.sort(confs, descending=True)
 
-    confs = confs.numpy().cpu()
-    predicts = predicts[indices].numpy().cpu()
-    targets = targets[indices].numpy().cpu()
+    confs = confs.cpu().numpy()
+    predicts = predicts[indices].cpu().numpy()
+    targets = targets[indices].cpu().numpy()
 
     res, true_pos = 0.0, 0
 
@@ -78,7 +78,7 @@ def GAP(predicts: torch.tensor, confs: torch.tensor, targets: torch.tensor,
         rel = int(p == t)
         true_pos += rel
 
-        res += true_pos / i * rel
+        res += true_pos / (i + 1) * rel
 
     res /= targets.shape[0] # FIXME: incorrect, not all test images depict landmarks
     return res
