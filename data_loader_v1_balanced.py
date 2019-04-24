@@ -70,10 +70,11 @@ class Dataset(data.Dataset):
         assert image.dtype == np.uint8
         assert image.shape == (self.image_size, self.image_size, 3)
 
-        if self.aug_type == 'albu':
-            image = self.augmentor(image=image)['image']
-        elif self.aug_type == 'imgaug':
-            image = self.augmentor.augment_image(image)
+        if self.augmentor is not None:
+            if self.aug_type == 'albu':
+                image = self.augmentor(image=image)['image']
+            elif self.aug_type == 'imgaug':
+                image = self.augmentor.augment_image(image)
 
         if SAVE_DEBUG_IMAGES:
             os.makedirs(f'../debug_images_{VERSION}/', exist_ok=True)
