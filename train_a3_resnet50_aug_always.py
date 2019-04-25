@@ -58,7 +58,7 @@ opt.TRAIN.NUM_FOLDS = 5
 opt.TRAIN.BATCH_SIZE = 256 * torch.cuda.device_count()
 opt.TRAIN.LOSS = 'CE'
 opt.TRAIN.SHUFFLE = True
-opt.TRAIN.WORKERS = min(12, multiprocessing.cpu_count())
+opt.TRAIN.WORKERS = 12 * torch.cuda.device_count()
 opt.TRAIN.PRINT_FREQ = 100
 opt.TRAIN.LEARNING_RATE = 1e-4
 opt.TRAIN.PATIENCE = 4
@@ -128,28 +128,24 @@ def load_data(fold: int, params: Dict[str, Any]) -> Any:
 
     transform_train = albu.Compose([
         albu.HorizontalFlip(.5),
+        albu.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.2, rotate_limit=45),
         albu.OneOf([
             albu.IAAAdditiveGaussianNoise(),
             albu.GaussNoise(),
-        ], p=0.2),
+            albu.MotionBlur(),
+            albu.MedianBlur(blur_limit=3),
+            albu.Blur(blur_limit=3),
+        ]),
         albu.OneOf([
-            albu.MotionBlur(p=.2),
-            albu.MedianBlur(blur_limit=3, p=0.1),
-            albu.Blur(blur_limit=3, p=0.1),
-        ], p=0.2),
-        albu.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.2, rotate_limit=45, p=0.2),
-        albu.OneOf([
-            albu.OpticalDistortion(p=0.3),
-            albu.GridDistortion(p=.1),
-            albu.IAAPiecewiseAffine(p=0.3),
-        ], p=0.2),
-        albu.OneOf([
+            albu.OpticalDistortion(),
+            albu.GridDistortion(),
+            albu.IAAPiecewiseAffine(),
             albu.CLAHE(clip_limit=2),
             albu.IAASharpen(),
             albu.IAAEmboss(),
             albu.RandomBrightnessContrast(),
-        ], p=0.3),
-        albu.HueSaturationValue(p=0.3),
+            albu.HueSaturationValue(),
+        ]),
     ])
 
     if opt.TEST.NUM_TTAS > 1:

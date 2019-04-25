@@ -131,25 +131,25 @@ def load_data(fold: int, params: Dict[str, Any]) -> Any:
         albu.OneOf([
             albu.IAAAdditiveGaussianNoise(),
             albu.GaussNoise(),
-        ], p=0.2),
+        ], p=0.6),
         albu.OneOf([
             albu.MotionBlur(p=.2),
             albu.MedianBlur(blur_limit=3, p=0.1),
             albu.Blur(blur_limit=3, p=0.1),
-        ], p=0.2),
+        ], p=0.6),
         albu.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.2, rotate_limit=45, p=0.2),
         albu.OneOf([
             albu.OpticalDistortion(p=0.3),
             albu.GridDistortion(p=.1),
             albu.IAAPiecewiseAffine(p=0.3),
-        ], p=0.2),
+        ], p=1.0),
         albu.OneOf([
             albu.CLAHE(clip_limit=2),
             albu.IAASharpen(),
             albu.IAAEmboss(),
             albu.RandomBrightnessContrast(),
-        ], p=0.3),
-        albu.HueSaturationValue(p=0.3),
+        ], p=0.8),
+        albu.HueSaturationValue(p=0.5),
     ])
 
     if opt.TEST.NUM_TTAS > 1:
