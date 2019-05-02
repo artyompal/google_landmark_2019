@@ -65,8 +65,8 @@ class Dataset(data.Dataset):
 
         sample = Image.open(os.path.join(self.path, filename + '.jpg'))
         assert sample.mode == 'RGB'
-
         image = np.array(sample)
+
         assert image.dtype == np.uint8
         assert image.shape == (self.image_size, self.image_size, 3)
 

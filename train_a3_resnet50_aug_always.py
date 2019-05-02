@@ -65,7 +65,7 @@ opt.TRAIN.PATIENCE = 4
 opt.TRAIN.LR_REDUCE_FACTOR = 0.2
 opt.TRAIN.MIN_LR = 1e-7
 opt.TRAIN.EPOCHS = 1000
-opt.TRAIN.PATH = f'../data/train_{opt.MODEL.INPUT_SIZE}'
+opt.TRAIN.PATH = f'../data/train_{opt.MODEL.INPUT_SIZE}/'
 opt.TRAIN.OPTIMIZER = 'Adam'
 opt.TRAIN.MIN_IMPROVEMENT = 0.001
 
@@ -76,7 +76,7 @@ opt.TRAIN.COSINE.PERIOD = 10
 opt.TRAIN.COSINE.COEFF = 1.2
 
 opt.TEST = edict()
-opt.TEST.PATH = f'../data/test_{opt.MODEL.INPUT_SIZE}'
+opt.TEST.PATH = f'../data/test_{opt.MODEL.INPUT_SIZE}/'
 opt.TEST.NUM_TTAS = 1
 
 
@@ -116,7 +116,12 @@ def load_data(fold: int, params: Dict[str, Any]) -> Any:
 
     train_df, val_df = train_val_split()
     print('train_df', train_df.shape, 'val_df', val_df.shape)
+
+    # read testset and filter out non-available images
     test_df = pd.read_csv('../data/test.csv')
+    print('original test_df', test_df.shape)
+    test_df = test_df[test_df.id.apply(lambda fn: os.path.exists(opt.TEST.PATH + fn + '.jpg'))]
+    print('filtered test_df', test_df.shape)
 
     label_encoder = LabelEncoder()
     label_encoder.fit(train_df.landmark_id.values)
@@ -314,12 +319,12 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.tensor, torch.tensor,
             all_confs.append(confs)
             all_predicts.append(predicts)
 
-            if target is not None:
+            if data_loader.dataset.mode != 'test':
                 all_targets.append(target)
 
     predicts = torch.cat(all_predicts)
     confs = torch.cat(all_confs)
-    targets = torch.cat(all_targets)
+    targets = torch.cat(all_targets) if all_targets else None
 
     return predicts, confs, targets
 
@@ -341,13 +346,21 @@ def validate(val_loader: Any, model: Any, epoch: int) -> float:
 def generate_submission(val_loader: Any, test_loader: Any, model: Any,
                         label_encoder: Any, epoch: int, model_path: Any) -> np.ndarray:
     predicts, confs, _ = inference(test_loader, model)
+    predicts = label_encoder.inverse_transform(predicts.cpu().numpy())
+    print('predicts')
+    print(np.array(predicts))
 
-    labels = [label_encoder.inverse_transform(pred) for pred in predicts]
-    print('labels')
-    print(np.array(labels))
+    predicts = [f'{L} {conf}' for L, conf in zip(predicts, confs.cpu().numpy())]
+    print('predicts')
+    print(np.array(predicts))
 
-    sub = test_loader.dataset.df
-    sub.landmark_id = labels
+    answers = test_loader.dataset.df
+    answers['landmarks'] = predicts
+    answers.drop(columns='url', inplace=True)
+
+    sub = pd.read_csv('../data/recognition_sample_submission.csv')
+    sub.drop(columns='landmarks', inplace=True)
+    sub = pd.merge(sub, answers, how='left', on='id')
     sub.to_csv(f'../submissions/{os.path.basename(model_path)[:-4]}.csv', index=False)
 
 def set_lr(optimizer: Any, lr: float) -> None:
@@ -413,8 +426,9 @@ def train_model(params: Dict[str, Any]) -> float:
 
     if args.predict:
         print('inference mode')
+        assert args.weights is not None
         generate_submission(val_loader, test_loader, model, label_encoder,
-                            last_epoch, args.pretrained)
+                            last_epoch, args.weights)
         sys.exit(0)
 
     if opt.TRAIN.LOSS == 'CE':
