@@ -1,3 +1,5 @@
+''' Some debug helpers. '''
+
 import inspect, os, re
 from typing import Any
 

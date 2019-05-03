@@ -49,37 +49,3 @@ class AverageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
 
-def GAP(predicts: torch.tensor, confs: torch.tensor, targets: torch.tensor,
-        threshold: float) -> torch.tensor:
-    ''' Computes GAP@1 '''
-    if len(predicts.shape) != 1:
-        dprint(predicts.shape)
-        assert False
-
-    if len(confs.shape) != 1:
-        dprint(confs.shape)
-        assert False
-
-    if len(targets.shape) != 1:
-        dprint(targets.shape)
-        assert False
-
-    assert predicts.shape == confs.shape and confs.shape == targets.shape
-
-    sorted_confs, indices = torch.sort(confs, descending=True)
-
-    confs = confs.cpu().numpy()
-    predicts = predicts[indices].cpu().numpy()
-    targets = targets[indices].cpu().numpy()
-
-    res, true_pos = 0.0, 0
-
-    for i, (c, p, t) in enumerate(zip(confs, predicts, targets)):
-        rel = int(p == t)
-        true_pos += rel
-
-        res += true_pos / (i + 1) * rel
-
-    res /= targets.shape[0] # FIXME: incorrect, not all test images depict landmarks
-    return res
-

@@ -1,0 +1,16 @@
+data:
+    train_filename: '200_samples_1672_classes'
+
+model:
+    arch: 'resnet50'
+    num_classes: 1672
+    images_per_class: 20
+    max_steps_per_epoch: 100000      # to bypass this limitation
+
+optimizer:
+    name: 'adam'
+    params:
+        lr: 0.0003
+
+scheduler:
+    name: 'reduce_lr_on_plateau'

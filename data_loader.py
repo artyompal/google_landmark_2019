@@ -11,7 +11,7 @@ from typing import *
 import numpy as np
 import pandas as pd
 import torch
-import torch.utils.data as data
+import torch.utils.data
 import torchvision.transforms as transforms
 
 from PIL import Image
@@ -21,9 +21,10 @@ from debug import dprint
 SAVE_DEBUG_IMAGES = False
 VERSION = os.path.splitext(os.path.basename(__file__))[0]
 
-class Dataset(data.Dataset):
+
+class ImageDataset(torch.utils.data.Dataset):
     def __init__(self, dataframe: pd.DataFrame, path: str, mode: str,
-                 image_size: int, num_classes: int, images_per_class: int,
+                 image_size: int, num_classes: int, images_per_class: int = 0,
                  aug_type: str = "albu", augmentor: Any = None) -> None:
         print(f'creating data loader {VERSION} - {mode}')
         assert mode in ['train', 'val', 'test']

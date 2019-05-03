@@ -1,5 +1,5 @@
 #!/usr/bin/python3.6
-''' Trains a model. '''
+''' Trains a model or infers predictions. '''
 
 import argparse
 import hashlib
@@ -25,219 +25,112 @@ import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-
-from easydict import EasyDict as edict
 import torchsummary
-from pytorchcv.model_provider import get_model
 
+import albumentations as albu
+
+from torch.utils.data import DataLoader
+from pytorchcv.model_provider import get_model
 from sklearn.preprocessing import LabelEncoder
 
 from tqdm import tqdm
-import albumentations as albu
+from easydict import EasyDict as edict
 
-from data_loader import Dataset
-from utils import create_logger, AverageMeter, GAP
+import parse_config
+
+from data_loader import ImageDataset
+from utils import create_logger, AverageMeter
 from debug import dprint
 
-IN_KERNEL = False
-
-opt = edict()
-
-opt.MODEL = edict()
-opt.MODEL.ARCH = 'resnet50'
-opt.MODEL.IMAGE_SIZE = 64
-opt.MODEL.INPUT_SIZE = 64
-opt.MODEL.VERSION = os.path.splitext(os.path.basename(__file__))[0][6:]
-opt.MODEL.DROPOUT = 0.5
-opt.MODEL.NUM_CLASSES = 203094
-
-opt.EXPERIMENT_DIR = f'../models/{opt.MODEL.VERSION}'
-
-opt.TRAIN = edict()
-opt.TRAIN.VAL_SAMPLES = 100000
-opt.TRAIN.IMAGES_PER_CLASS = 10
-opt.TRAIN.STEPS_PER_EPOCH = 30000
-
-opt.TRAIN.SPLITS_FILE = '../cache/splits.pkl'
-opt.TRAIN.NUM_FOLDS = 5
-opt.TRAIN.BATCH_SIZE = 256 * torch.cuda.device_count()
-opt.TRAIN.LOSS = 'CE'
-opt.TRAIN.SHUFFLE = True
-opt.TRAIN.WORKERS = min(12, multiprocessing.cpu_count())
-opt.TRAIN.PRINT_FREQ = 100
-opt.TRAIN.LEARNING_RATE = 1e-4
-opt.TRAIN.PATIENCE = 4
-opt.TRAIN.LR_REDUCE_FACTOR = 0.2
-opt.TRAIN.MIN_LR = 1e-7
-opt.TRAIN.EPOCHS = 1000
-opt.TRAIN.PATH = f'../data/train_{opt.MODEL.INPUT_SIZE}'
-opt.TRAIN.OPTIMIZER = 'Adam'
-opt.TRAIN.MIN_IMPROVEMENT = 0.001
-
-opt.TRAIN.COSINE = edict()
-opt.TRAIN.COSINE.ENABLE = False
-opt.TRAIN.COSINE.LR = 1e-4
-opt.TRAIN.COSINE.PERIOD = 10
-opt.TRAIN.COSINE.COEFF = 1.2
-
-opt.TEST = edict()
-opt.TEST.PATH = f'../data/test_{opt.MODEL.INPUT_SIZE}'
-opt.TEST.NUM_TTAS = 1
+from losses import get_loss
+from schedulers import get_scheduler
+from optimizers import get_optimizer
+from metrics import GAP
 
 
-def train_val_split() -> Tuple[pd.DataFrame, pd.DataFrame]:
-    if not os.path.exists(opt.TRAIN.SPLITS_FILE):
-        full_df = pd.read_csv('../data/train.csv')
-        print('full_df', full_df.shape)
-
-        value_counts = full_df.landmark_id.value_counts()
-        more_than_one_sample = value_counts[value_counts > 1].index
-        print('classes with more than 1 sample', more_than_one_sample.shape)
-
-        val_candidates_df = full_df.loc[full_df.landmark_id.isin(more_than_one_sample)]
-        val_candidates = val_candidates_df.groupby('landmark_id').first().id
-        val_ids = val_candidates.sample(opt.TRAIN.VAL_SAMPLES, random_state=0)
-
-        train_df = full_df.loc[~full_df.id.isin(val_ids)]
-        val_df = full_df.loc[full_df.id.isin(val_ids)]
-
-        dprint(train_df.shape)
-        dprint(val_df.shape)
-
-        with open(opt.TRAIN.SPLITS_FILE, 'wb') as f:
-            pickle.dump((train_df, val_df), f)
-    else:
-        with open(opt.TRAIN.SPLITS_FILE, 'rb') as f:
-            train_df, val_df = pickle.load(f)
-
-    return train_df, val_df
-
-def load_data(fold: int, params: Dict[str, Any]) -> Any:
+def load_data(fold: int) -> Any:
     torch.multiprocessing.set_sharing_strategy('file_system')
     cudnn.benchmark = True
 
-    logger.info('Options:')
-    logger.info(pprint.pformat(opt))
+    logger.info('config:')
+    logger.info(pprint.pformat(config))
 
-    train_df, val_df = train_val_split()
+    train_df = pd.read_csv(os.path.join(config.data.data_dir, config.data.train_csv))
+    val_df = pd.read_csv(os.path.join(config.data.data_dir, config.data.val_csv))
     print('train_df', train_df.shape, 'val_df', val_df.shape)
     test_df = pd.read_csv('../data/test.csv')
 
     label_encoder = LabelEncoder()
     label_encoder.fit(train_df.landmark_id.values)
     print('found classes', len(label_encoder.classes_))
-    assert len(label_encoder.classes_) == opt.MODEL.NUM_CLASSES
+    assert len(label_encoder.classes_) == config.model.num_classes
 
     train_df.landmark_id = label_encoder.transform(train_df.landmark_id)
     val_df.landmark_id = label_encoder.transform(val_df.landmark_id)
 
-    transform_train = albu.Compose([
-        albu.HorizontalFlip(.5),
-        albu.OneOf([
-            albu.IAAAdditiveGaussianNoise(),
-            albu.GaussNoise(),
-        ], p=0.2),
-        albu.OneOf([
-            albu.MotionBlur(p=.2),
-            albu.MedianBlur(blur_limit=3, p=0.1),
-            albu.Blur(blur_limit=3, p=0.1),
-        ], p=0.2),
-        albu.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.2, rotate_limit=45, p=0.2),
-        albu.OneOf([
-            albu.OpticalDistortion(p=0.3),
-            albu.GridDistortion(p=.1),
-            albu.IAAPiecewiseAffine(p=0.3),
-        ], p=0.2),
-        albu.OneOf([
-            albu.CLAHE(clip_limit=2),
-            albu.IAASharpen(),
-            albu.IAAEmboss(),
-            albu.RandomBrightnessContrast(),
-        ], p=0.3),
-        albu.HueSaturationValue(p=0.3),
-    ])
+    transform_train = albu.HorizontalFlip(.5)
 
-    if opt.TEST.NUM_TTAS > 1:
+    if config.test.num_ttas > 1:
         transform_test = albu.Compose([
-            albu.PadIfNeeded(opt.MODEL.INPUT_SIZE, opt.MODEL.INPUT_SIZE),
-            albu.RandomCrop(height=opt.MODEL.INPUT_SIZE, width=opt.MODEL.INPUT_SIZE),
+            albu.PadIfNeeded(config.model.input_size, config.model.input_size),
+            albu.RandomCrop(height=config.model.input_size, width=config.model.input_size),
             albu.HorizontalFlip(),
         ])
     else:
         transform_test = albu.Compose([
-            albu.PadIfNeeded(opt.MODEL.INPUT_SIZE, opt.MODEL.INPUT_SIZE),
-            albu.CenterCrop(height=opt.MODEL.INPUT_SIZE, width=opt.MODEL.INPUT_SIZE),
+            albu.PadIfNeeded(config.model.input_size, config.model.input_size),
+            albu.CenterCrop(height=config.model.input_size, width=config.model.input_size),
         ])
 
 
-    train_dataset = Dataset(train_df, path=opt.TRAIN.PATH, mode='train',
-                            image_size=opt.MODEL.IMAGE_SIZE,
-                            num_classes=opt.MODEL.NUM_CLASSES,
-                            images_per_class=opt.TRAIN.IMAGES_PER_CLASS,
-                            aug_type='albu', augmentor=transform_train)
+    train_dataset = ImageDataset(train_df, path=config.data.train_dir, mode='train',
+                                 image_size=config.model.image_size,
+                                 num_classes=config.model.num_classes,
+                                 images_per_class=config.train.images_per_class,
+                                 aug_type='albu', augmentor=transform_train)
 
-    val_dataset = Dataset(val_df, path=opt.TRAIN.PATH, mode='val',
-                          image_size=opt.MODEL.IMAGE_SIZE,
-                          num_classes=opt.MODEL.NUM_CLASSES)
-    test_dataset = Dataset(test_df, path=opt.TEST.PATH, mode='test',
-                           image_size=opt.MODEL.IMAGE_SIZE,
-                           num_classes=opt.MODEL.NUM_CLASSES)
+    val_dataset = ImageDataset(val_df, path=config.data.train_dir, mode='val',
+                               image_size=config.model.image_size,
+                               num_classes=config.model.num_classes)
 
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=opt.TRAIN.BATCH_SIZE, shuffle=True,
-        num_workers=opt.TRAIN.WORKERS, drop_last=True)
+    test_dataset = ImageDataset(test_df, path=config.test.path, mode='test',
+                                image_size=config.model.image_size,
+                                num_classes=config.model.num_classes)
 
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=opt.TRAIN.BATCH_SIZE, shuffle=False, num_workers=opt.TRAIN.WORKERS)
+    train_loader = DataLoader(train_dataset, batch_size=config.train.batch_size,
+                              shuffle=config.train.shuffle, num_workers=
+                              config.num_workers, drop_last=True)
 
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset, batch_size=opt.TRAIN.BATCH_SIZE, shuffle=False, num_workers=opt.TRAIN.WORKERS)
+    val_loader = DataLoader(val_dataset, batch_size=config.val.batch_size,
+                            shuffle=False, num_workers=config.num_workers)
+
+    test_loader = DataLoader(test_dataset, batch_size=config.test.batch_size,
+                             shuffle=False, num_workers=config.num_workers)
 
     return train_loader, val_loader, test_loader, label_encoder
 
-class Net(nn.Module):
+class Model(nn.Module):
     def __init__(self) -> None:
         super().__init__()
 
-        self.model = get_model(opt.MODEL.ARCH, pretrained=True)
-        assert(opt.MODEL.INPUT_SIZE % 32 == 0)
+        self.model = get_model(config.model.arch, pretrained=True)
+        assert config.model.input_size % 32 == 0
 
         self.model.features[-1] = nn.AdaptiveAvgPool2d(1)
+        self.model.output = nn.Linear(self.model.output.in_features, config.model.num_classes)
 
-        self.model.output = nn.Sequential(
-            nn.Dropout(opt.MODEL.DROPOUT),
-            nn.Linear(2048, 512),
-            nn.Dropout(opt.MODEL.DROPOUT),
-            nn.Linear(512, opt.MODEL.NUM_CLASSES),
-            )
-
-        # self.dropout = nn.Dropout2d(opt.MODEL.DROPOUT, inplace=True)
-        # self.head = Head(channel_size, num_outputs)
-
-    def forward(self, images: torch.tensor, labels: torch.tensor=None) -> torch.tensor:
+    def forward(self, images: torch.Tensor) -> torch.Tensor:
         return self.model.forward(images)
 
-        # features = self.model.features(images)
-        # features = self.bn1(features)
-        # features = self.dropout(features)
-        # features = features.view(features.size(0), -1)
-        # features = self.fc1(features)
-        # features = self.bn2(features)
-        #
-        # features = self.head(features)
-        # features = F.normalize(features)
-        # return features
-
 def create_model() -> Any:
-    logger.info(f'creating a model {opt.MODEL.ARCH}')
-    assert(opt.MODEL.INPUT_SIZE % 32 == 0)
+    logger.info(f'creating a model {config.model.arch}')
 
-    model = Net()
+    model = Model()
     model = torch.nn.DataParallel(model).cuda()
     model.cuda()
 
-    # if torch.cuda.device_count() == 1:
-    #     torchsummary.summary(model, (3, opt.MODEL.INPUT_SIZE, opt.MODEL.INPUT_SIZE))
+    if args.show_summary:
+        torchsummary.summary(model, (3, config.model.input_size, config.model.input_size))
 
     return model
 
@@ -254,14 +147,14 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
 
     model.train()
 
-    num_steps = min(len(train_loader), opt.TRAIN.STEPS_PER_EPOCH)
+    num_steps = min(len(train_loader), config.train.max_steps_per_epoch)
     print('total batches:', num_steps)
 
     threshold = 0.1
     end = time.time()
 
     for i, (input_, target) in enumerate(train_loader):
-        if i >= opt.TRAIN.STEPS_PER_EPOCH:
+        if i >= num_steps:
             break
 
         # compute output
@@ -285,7 +178,7 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % opt.TRAIN.PRINT_FREQ == 0:
+        if i % config.train.log_freq == 0:
             logger.info(f'{epoch} [{i}/{num_steps}]\t'
                         f'time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                         f'loss {losses.val:.4f} ({losses.avg:.4f})\t'
@@ -293,7 +186,7 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
 
     logger.info(f' * average GAP on train {avg_score.avg:.4f}')
 
-def inference(data_loader: Any, model: Any) -> Tuple[torch.tensor, torch.tensor, torch.tensor]:
+def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     ''' Returns predictions and targets, if any. '''
     model.eval()
 
@@ -301,17 +194,17 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.tensor, torch.tensor,
     all_predicts, all_confs, all_targets = [], [], []
 
     with torch.no_grad():
-        for i, (input_, target) in enumerate(tqdm(data_loader, disable=IN_KERNEL)):
-            if opt.TEST.NUM_TTAS != 1 and data_loader.dataset.mode == 'test':
+        for i, (input_, target) in enumerate(tqdm(data_loader, disable=config.in_kernel)):
+            if config.test.num_ttas != 1 and data_loader.dataset.mode == 'test':
                 bs, ncrops, c, h, w = input_.size()
                 input_ = input_.view(-1, c, h, w) # fuse batch size and ncrops
 
                 output = model(input_)
                 output = activation(output)
 
-                if opt.TEST.TTA_COMBINE_FUNC == 'max':
+                if config.test.tta_combine_func == 'max':
                     output = output.view(bs, ncrops, -1).max(1)[0]
-                elif opt.TEST.TTA_COMBINE_FUNC == 'mean':
+                elif config.test.tta_combine_func == 'mean':
                     output = output.view(bs, ncrops, -1).mean(1)
                 else:
                     assert False
@@ -372,53 +265,37 @@ def read_lr(optimizer: Any) -> float:
 
     assert False
 
-def train_model(params: Dict[str, Any]) -> float:
+def run() -> float:
     np.random.seed(0)
-    model_dir = opt.EXPERIMENT_DIR
+    model_dir = config.experiment_dir
 
     logger.info('=' * 50)
-    logger.info(f'hyperparameters: {params}')
+    # logger.info(f'hyperparameters: {params}')
 
-    train_loader, val_loader, test_loader, label_encoder = load_data(args.fold, params)
-    model = create_model() # float(params['dropout']))
-    # freeze_layers(model)
+    train_loader, val_loader, test_loader, label_encoder = load_data(args.fold)
+    model = create_model()
 
-    # if torch.cuda.device_count() == 1:
-    #     torchsummary.summary(model, (3, 224, 224))
-
-    if opt.TRAIN.OPTIMIZER == 'Adam':
-        optimizer = optim.Adam(model.parameters(), opt.TRAIN.LEARNING_RATE)
-    elif opt.TRAIN.OPTIMIZER == 'SGD':
-        optimizer = optim.SGD(model.parameters(), opt.TRAIN.LEARNING_RATE,
-                              momentum=0.9, nesterov=True)
-    else:
-        assert False
-
-    if opt.TRAIN.COSINE.ENABLE:
-        set_lr(optimizer, opt.TRAIN.COSINE.LR)
-        lr_scheduler = CosineLRWithRestarts(optimizer, opt.TRAIN.BATCH_SIZE,
-            opt.TRAIN.BATCH_SIZE * opt.TRAIN.STEPS_PER_EPOCH,
-            restart_period=opt.TRAIN.COSINE.PERIOD, t_mult=opt.TRAIN.COSINE.COEFF)
-    else:
-        lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max',
-                           patience=opt.TRAIN.PATIENCE, factor=opt.TRAIN.LR_REDUCE_FACTOR,
-                           verbose=True, min_lr=opt.TRAIN.MIN_LR,
-                           threshold=opt.TRAIN.MIN_IMPROVEMENT, threshold_mode='abs')
+    optimizer = get_optimizer(config)
+    lr_scheduler = get_scheduler(config)
+    criterion = get_loss(config)
 
     if args.weights is None:
         last_epoch = 0
         logger.info(f'training will start from epoch {last_epoch+1}')
     else:
         last_checkpoint = torch.load(args.weights)
-        assert(last_checkpoint['arch']==opt.MODEL.ARCH)
+        assert last_checkpoint['arch'] == config.model.arch
         model.load_state_dict(last_checkpoint['state_dict'])
         optimizer.load_state_dict(last_checkpoint['optimizer'])
         logger.info(f'checkpoint {args.weights} was loaded.')
 
         last_epoch = last_checkpoint['epoch']
         logger.info(f'loaded the model from epoch {last_epoch}')
-        set_lr(optimizer, opt.TRAIN.LEARNING_RATE)
 
+        if args.lr_override != 0:
+            set_lr(optimizer, float(args.lr_override))
+        elif 'lr' in config.train.scheduler.params:
+            set_lr(optimizer, config.train.scheduler.params.lr)
 
     if args.predict:
         print('inference mode')
@@ -426,45 +303,32 @@ def train_model(params: Dict[str, Any]) -> float:
                             last_epoch, args.pretrained)
         sys.exit(0)
 
-    if opt.TRAIN.LOSS == 'CE':
-        criterion = nn.CrossEntropyLoss()
-    else:
-        raise RuntimeError('unknown loss specified')
-
     best_score = 0.0
     best_epoch = 0
 
     last_lr = read_lr(optimizer)
     best_model_path = None
 
-    for epoch in range(last_epoch + 1, opt.TRAIN.EPOCHS + 1):
+    for epoch in range(last_epoch + 1, config.train.epochs + 1):
         logger.info('-' * 50)
 
-        if not opt.TRAIN.COSINE.ENABLE:
+        if not config.train.cosine.enable:
             lr = read_lr(optimizer)
             if lr < last_lr - 1e-10 and best_model_path is not None:
                 # reload the best model
                 last_checkpoint = torch.load(os.path.join(model_dir, best_model_path))
-                assert(last_checkpoint['arch']==opt.MODEL.ARCH)
+                assert(last_checkpoint['arch']==config.model.arch)
                 model.load_state_dict(last_checkpoint['state_dict'])
                 optimizer.load_state_dict(last_checkpoint['optimizer'])
                 logger.info(f'checkpoint {best_model_path} was loaded.')
                 set_lr(optimizer, lr)
                 last_lr = lr
 
-            if lr < opt.TRAIN.MIN_LR * 1.01:
+            if lr < config.train.min_lr * 1.01:
                 logger.info('reached minimum LR, stopping')
                 break
 
-                # logger.info(f'lr={lr}, start cosine annealing!')
-                # set_lr(optimizer, opt.TRAIN.COSINE.LR)
-                # opt.TRAIN.COSINE.ENABLE = True
-                #
-                # lr_scheduler = CosineLRWithRestarts(optimizer, opt.TRAIN.BATCH_SIZE,
-                #     opt.TRAIN.BATCH_SIZE * opt.TRAIN.STEPS_PER_EPOCH,
-                #     restart_period=opt.TRAIN.COSINE.PERIOD, t_mult=opt.TRAIN.COSINE.COEFF)
-
-        if opt.TRAIN.COSINE.ENABLE:
+        if config.train.cosine.enable:
             lr_scheduler.step()
 
         read_lr(optimizer)
@@ -472,7 +336,7 @@ def train_model(params: Dict[str, Any]) -> float:
         train(train_loader, model, criterion, optimizer, epoch, lr_scheduler)
         score = validate(val_loader, model, epoch)
 
-        if not opt.TRAIN.COSINE.ENABLE:
+        if not config.train.cosine.enable:
             lr_scheduler.step(score)    # type: ignore
 
         is_best = score > best_score
@@ -482,15 +346,15 @@ def train_model(params: Dict[str, Any]) -> float:
 
         data_to_save = {
             'epoch': epoch,
-            'arch': opt.MODEL.ARCH,
+            'arch': config.model.arch,
             'state_dict': model.state_dict(),
             'best_score': best_score,
             'score': score,
             'optimizer': optimizer.state_dict(),
-            'options': opt
+            'options': config
         }
 
-        filename = opt.MODEL.VERSION
+        filename = config.version
         if is_best:
             best_model_path = f'{filename}_f{args.fold}_e{epoch:02d}_{score:.04f}.pth'
             save_checkpoint(data_to_save, best_model_path, model_dir)
@@ -500,27 +364,19 @@ def train_model(params: Dict[str, Any]) -> float:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--config', help='model configuration file (YAML)', type=str, required=True)
     parser.add_argument('--weights', help='model to resume training', type=str)
     parser.add_argument('--fold', help='fold number', type=int, default=0)
     parser.add_argument('--predict', help='model to resume training', action='store_true')
-    parser.add_argument('--num_tta', help='number of TTAs', type=int, default=opt.TEST.NUM_TTAS)
+    parser.add_argument('--show_summary', help='show model summary', action='store_true')
+    parser.add_argument('--lr_override', help='override learning rate', type=float, default=0)
     args = parser.parse_args()
 
-    params = {'affine': 'medium',
-              'aug_global_prob': 0.5346290229823514,
-              'blur': 0.1663552826866818,
-              'color': 0.112355821364934,
-              'distortion': 0.12486453027371469,
-              'dropout': 0.3,
-              'noise': 0.29392632695458587,
-              'rotate90': 0,
-              'vflip': 0}
+    config = parse_config.load(args.config)
 
-    opt.EXPERIMENT_DIR = os.path.join(opt.EXPERIMENT_DIR, f'fold_{args.fold}')
-    opt.TEST.NUM_TTAS = args.num_tta
+    if not os.path.exists(config.experiment_dir):
+        os.makedirs(config.experiment_dir)
 
-    if not os.path.exists(opt.EXPERIMENT_DIR):
-        os.makedirs(opt.EXPERIMENT_DIR)
-
-    logger = create_logger(os.path.join(opt.EXPERIMENT_DIR, 'log_training.txt'))
-    train_model(params)
+    log_filename = 'log_training.txt' if not args.predict else 'log_predict.txt'
+    logger = create_logger(os.path.join(config.experiment_dir, log_filename))
+    run()
