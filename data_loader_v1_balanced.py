@@ -16,11 +16,11 @@ from debug import dprint
 
 SAVE_DEBUG_IMAGES = False
 
-VERSION = os.path.basename(__file__)[12:-3]
+VERSION = os.path.splitext(os.path.basename(__file__))[0]
 
 class Dataset(data.Dataset):
     def __init__(self, dataframe: pd.DataFrame, path: str, mode: str,
-                 image_size: int, num_classes: int, images_per_class: int = 1,
+                 image_size: int, num_classes: int, images_per_class: int,
                  aug_type: str = "albu", augmentor: Any = None) -> None:
         print(f'creating data loader {VERSION} - {mode}')
         assert mode in ['train', 'val', 'test']

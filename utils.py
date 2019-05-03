@@ -82,3 +82,4 @@ def GAP(predicts: torch.tensor, confs: torch.tensor, targets: torch.tensor,
 
     res /= targets.shape[0] # FIXME: incorrect, not all test images depict landmarks
     return res
+

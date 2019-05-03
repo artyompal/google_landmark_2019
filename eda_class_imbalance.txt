@@ -1,0 +1,55 @@
+
+eda_class_imbalance2.py:8 df.columns Index(['id', 'url', 'landmark_id'], dtype='object')
+eda_class_imbalance2.py:9 df.shape (4132914, 3)
+eda_class_imbalance2.py:10 df.head()                  id                                                url  landmark_id
+0  6e158a47eb2ca3f6  https://upload.wikimedia.org/wikipedia/commons...       142820
+1  202cd79556f30760  http://upload.wikimedia.org/wikipedia/commons/...       104169
+2  3ad87684c99c06e1  http://upload.wikimedia.org/wikipedia/commons/...        37914
+3  e7f70e9c61e66af3  https://upload.wikimedia.org/wikipedia/commons...       102140
+4  4072182eddd0100e  https://upload.wikimedia.org/wikipedia/commons...         2474
+
+eda_class_imbalance2.py:11 df.landmark_id.unique().shape (203094,)
+eda_class_imbalance2.py:14 describe(counts) DescribeResult(nobs=203094, minmax=(1, 10247), mean=20.34975922479246, variance=2742.1996287573975, skewness=50.407900932571934, kurtosis=7753.8331819825535)
+val=1
+eda_class_imbalance2.py:18 sum(counts == val) 18894
+eda_class_imbalance2.py:19 sum(counts == val) / counts.shape[0] 0.09303081331797099
+val=2
+eda_class_imbalance2.py:18 sum(counts == val) 17737
+eda_class_imbalance2.py:19 sum(counts == val) / counts.shape[0] 0.08733394388805184
+val=3
+eda_class_imbalance2.py:18 sum(counts == val) 15804
+eda_class_imbalance2.py:19 sum(counts == val) / counts.shape[0] 0.07781618363910307
+val=4
+eda_class_imbalance2.py:18 sum(counts == val) 13526
+eda_class_imbalance2.py:19 sum(counts == val) / counts.shape[0] 0.06659970260076614
+val=5
+eda_class_imbalance2.py:18 sum(counts == val) 11402
+eda_class_imbalance2.py:19 sum(counts == val) / counts.shape[0] 0.0561414911321851
+val=6
+eda_class_imbalance2.py:18 sum(counts == val) 9976
+eda_class_imbalance2.py:19 sum(counts == val) / counts.shape[0] 0.04912011186938068
+val=7
+eda_class_imbalance2.py:18 sum(counts == val) 8759
+eda_class_imbalance2.py:19 sum(counts == val) / counts.shape[0] 0.04312781273695924
+val=8
+eda_class_imbalance2.py:18 sum(counts == val) 7654
+eda_class_imbalance2.py:19 sum(counts == val) / counts.shape[0] 0.037686982382542075
+val=9
+eda_class_imbalance2.py:18 sum(counts == val) 6602
+eda_class_imbalance2.py:19 sum(counts == val) / counts.shape[0] 0.03250711493200193
+val=5
+eda_class_imbalance2.py:23 sum(counts >= val) 137133
+eda_class_imbalance2.py:24 sum(counts >= val) / counts.shape[0] 0.6752193565541079
+val=10
+eda_class_imbalance2.py:23 sum(counts >= val) 92740
+eda_class_imbalance2.py:24 sum(counts >= val) / counts.shape[0] 0.4566358435010389
+val=20
+eda_class_imbalance2.py:23 sum(counts >= val) 52584
+eda_class_imbalance2.py:24 sum(counts >= val) / counts.shape[0] 0.2589145912730066
+val=50
+eda_class_imbalance2.py:23 sum(counts >= val) 18425
+eda_class_imbalance2.py:24 sum(counts >= val) / counts.shape[0] 0.09072153781007809
+val=100
+eda_class_imbalance2.py:23 sum(counts >= val) 6516
+eda_class_imbalance2.py:24 sum(counts >= val) / counts.shape[0] 0.03208366569174865
+
