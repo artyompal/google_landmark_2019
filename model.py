@@ -1,8 +1,17 @@
 #!/usr/bin/python3.6
 ''' Trains a model. '''
 
-import argparse, hashlib, logging, math, multiprocessing
-import os, pickle, pprint, sys, time
+import argparse
+import hashlib
+import logging
+import math
+import multiprocessing
+import os
+import pickle
+import pprint
+import sys
+import time
+
 from typing import *
 from collections import defaultdict, Counter
 
@@ -16,23 +25,19 @@ import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-# import torchvision.models as models
 
 from easydict import EasyDict as edict
-import PIL
 import torchsummary
-# import pretrainedmodels
 from pytorchcv.model_provider import get_model
 
 from sklearn.preprocessing import LabelEncoder
 
 from tqdm import tqdm
-
-from data_loader_v1_balanced import Dataset
-from utils import create_logger, AverageMeter, GAP
-from debug import dprint, assert_eq, assert_ne
-from cosine_scheduler import CosineLRWithRestarts
 import albumentations as albu
+
+from data_loader import Dataset
+from utils import create_logger, AverageMeter, GAP
+from debug import dprint
 
 IN_KERNEL = False
 
@@ -180,7 +185,7 @@ def load_data(fold: int, params: Dict[str, Any]) -> Any:
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=opt.TRAIN.BATCH_SIZE, shuffle=True,
-        num_workers=opt.TRAIN.WORKERS)
+        num_workers=opt.TRAIN.WORKERS, drop_last=True)
 
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=opt.TRAIN.BATCH_SIZE, shuffle=False, num_workers=opt.TRAIN.WORKERS)

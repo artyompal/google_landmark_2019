@@ -1,11 +1,15 @@
 ''' Data loaders for training & validation. '''
 
-import math, os, pickle
+import math
+import os
+import pickle
+
 from collections import defaultdict
 from glob import glob
 from typing import *
 
-import numpy as np, pandas as pd
+import numpy as np
+import pandas as pd
 import torch
 import torch.utils.data as data
 import torchvision.transforms as transforms
@@ -15,7 +19,6 @@ from tqdm import tqdm
 from debug import dprint
 
 SAVE_DEBUG_IMAGES = False
-
 VERSION = os.path.splitext(os.path.basename(__file__))[0]
 
 class Dataset(data.Dataset):
@@ -35,19 +38,6 @@ class Dataset(data.Dataset):
         self.aug_type = aug_type
         self.augmentor = augmentor
 
-        if mode == 'train':
-            cache_path = '../cache/dataset.pickle'
-
-            if not os.path.exists(cache_path):
-                self.samples = [images.id.values for _, images in tqdm(self.df.groupby('landmark_id'))]
-                with open(cache_path, 'wb') as f:
-                    pickle.dump(self.samples, f)
-            else:
-                with open(cache_path, 'rb') as f:
-                    self.samples = pickle.load(f)
-
-            assert len(self.samples) == self.num_classes
-
         self.transforms = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
@@ -56,12 +46,7 @@ class Dataset(data.Dataset):
 
     def __getitem__(self, index: int) -> Any:
         ''' Returns: tuple (sample, target) '''
-        if self.mode == 'train':
-            class_idx = index // self.images_per_class
-            assert class_idx >= 0 and class_idx < self.num_classes
-            filename = np.random.choice(self.samples[class_idx])
-        else:
-            filename = self.df.id.values[index]
+        filename = self.df.id.values[index]
 
         sample = Image.open(os.path.join(self.path, filename + '.jpg'))
         assert sample.mode == 'RGB'
@@ -84,16 +69,8 @@ class Dataset(data.Dataset):
 
         if self.mode == 'test':
             return image, ''
-        elif self.mode == 'train':
-            return image, class_idx
         else:
             return image, self.df.landmark_id.values[index]
 
     def __len__(self) -> int:
-        count = self.df.shape[0]
-
-        if self.mode == 'train':
-            count = self.images_per_class * self.num_classes
-            count -= count % 32
-
-        return count
+        return self.df.shape[0]
