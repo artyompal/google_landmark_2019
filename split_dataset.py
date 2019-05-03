@@ -1,3 +1,5 @@
+#!/usr/bin/python3.6
+
 ''' Extracts N most frequent classes and splits data set for K-fold cross-validation. '''
 import argparse
 import pandas as pd
@@ -22,7 +24,8 @@ if __name__ == '__main__':
     counts = df.landmark_id.value_counts()
 
     selected_classes = counts[counts >= min_samples].index
-    print('classes with at least N samples:', selected_classes.shape[0])
+    num_classes = selected_classes.shape[0]
+    print('classes with at least N samples:', num_classes)
 
     df = df.loc[df.landmark_id.isin(selected_classes)]
     dprint(df.shape)
@@ -31,5 +34,10 @@ if __name__ == '__main__':
 
     for i, (train_index, val_index) in enumerate(tqdm(skf.split(df.id, df.landmark_id),
                                                       total=num_folds)):
-        df.iloc[train_index].to_csv(f'f{i}_smp_{min_samples}_train.csv', index=False)
-        df.iloc[val_index].to_csv(f'f{i}_smp_{min_samples}_val.csv', index=False)
+        train = df.iloc[train_index]
+        assert train.landmark_id.unique().shape[0] == num_classes
+        train.to_csv(f'{min_samples}_samples_{num_classes}_classes_fold_{i}_train.csv', index=False)
+
+        val = df.iloc[val_index]
+        assert val.landmark_id.unique().shape[0] == num_classes
+        val.to_csv(f'{min_samples}_samples_{num_classes}_classes_fold_{i}_val.csv', index=False)
