@@ -14,3 +14,6 @@ optimizer:
 
 scheduler:
     name: 'reduce_lr_on_plateau'
+
+loss:
+    name: 'cross_entropy'

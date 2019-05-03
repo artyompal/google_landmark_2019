@@ -55,8 +55,9 @@ def load_data(fold: int) -> Any:
     logger.info('config:')
     logger.info(pprint.pformat(config))
 
-    train_df = pd.read_csv(os.path.join(config.data.data_dir, config.data.train_csv))
-    val_df = pd.read_csv(os.path.join(config.data.data_dir, config.data.val_csv))
+    fname = f'{config.data.train_filename}_fold_{fold}_'
+    train_df = pd.read_csv(os.path.join(config.data.data_dir, fname + 'train.csv'))
+    val_df = pd.read_csv(os.path.join(config.data.data_dir, fname + 'val.csv'))
     print('train_df', train_df.shape, 'val_df', val_df.shape)
     test_df = pd.read_csv('../data/test.csv')
 
@@ -93,7 +94,7 @@ def load_data(fold: int) -> Any:
                                image_size=config.model.image_size,
                                num_classes=config.model.num_classes)
 
-    test_dataset = ImageDataset(test_df, path=config.test.path, mode='test',
+    test_dataset = ImageDataset(test_df, path=config.data.test_dir, mode='test',
                                 image_size=config.model.image_size,
                                 num_classes=config.model.num_classes)
 
@@ -171,8 +172,8 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
         loss.backward()
         optimizer.step()
 
-        if hasattr(lr_scheduler, 'batch_step'):
-            lr_scheduler.batch_step()
+        if is_scheduler_continuous():
+            lr_scheduler.step()
 
         # measure elapsed time
         batch_time.update(time.time() - end)
@@ -265,6 +266,9 @@ def read_lr(optimizer: Any) -> float:
 
     assert False
 
+def is_scheduler_continuous() -> bool:
+    return config.scheduler.name in ['exponential', 'cosine', 'cyclic_lr']
+
 def run() -> float:
     np.random.seed(0)
     model_dir = config.experiment_dir
@@ -275,8 +279,8 @@ def run() -> float:
     train_loader, val_loader, test_loader, label_encoder = load_data(args.fold)
     model = create_model()
 
-    optimizer = get_optimizer(config)
-    lr_scheduler = get_scheduler(config)
+    optimizer = get_optimizer(config, model.parameters())
+    lr_scheduler = get_scheduler(config, optimizer)
     criterion = get_loss(config)
 
     if args.weights is None:
@@ -309,13 +313,14 @@ def run() -> float:
     last_lr = read_lr(optimizer)
     best_model_path = None
 
-    for epoch in range(last_epoch + 1, config.train.epochs + 1):
+    for epoch in range(last_epoch + 1, config.train.num_epochs + 1):
         logger.info('-' * 50)
 
-        if not config.train.cosine.enable:
+        if not is_scheduler_continuous():
+            # if we have just reduced LR, reload the best saved model
             lr = read_lr(optimizer)
+
             if lr < last_lr - 1e-10 and best_model_path is not None:
-                # reload the best model
                 last_checkpoint = torch.load(os.path.join(model_dir, best_model_path))
                 assert(last_checkpoint['arch']==config.model.arch)
                 model.load_state_dict(last_checkpoint['state_dict'])
@@ -328,15 +333,12 @@ def run() -> float:
                 logger.info('reached minimum LR, stopping')
                 break
 
-        if config.train.cosine.enable:
-            lr_scheduler.step()
-
         read_lr(optimizer)
 
         train(train_loader, model, criterion, optimizer, epoch, lr_scheduler)
         score = validate(val_loader, model, epoch)
 
-        if not config.train.cosine.enable:
+        if not is_scheduler_continuous():
             lr_scheduler.step(score)    # type: ignore
 
         is_best = score > best_score

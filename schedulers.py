@@ -3,7 +3,7 @@
 import torch.optim.lr_scheduler as lr_scheduler
 
 
-def step(optimizer, last_epoch, step_size=80, gamma=0.1, **_):
+def step(optimizer, last_epoch, step_size=10, gamma=0.1, **_):
     return lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma,
                                last_epoch=last_epoch)
 
@@ -42,6 +42,6 @@ def cyclic_lr(optimizer, last_epoch, base_lr=0.001, max_lr=0.01,
                                  cycle_momentum, base_momentum=base_momentum,
                                  max_momentum=max_momentum, last_epoch=last_epoch)
 
-def get_scheduler(config, optimizer, last_epoch):
+def get_scheduler(config, optimizer, last_epoch=-1):
     func = globals().get(config.scheduler.name)
     return func(optimizer, last_epoch, **config.scheduler.params)

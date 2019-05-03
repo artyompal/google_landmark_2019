@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from config import edict
+from easydict import EasyDict as edict
 
 def cross_entropy() -> Any:
     return torch.nn.CrossEntropyLoss()

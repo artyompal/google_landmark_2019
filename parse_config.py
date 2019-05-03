@@ -18,7 +18,7 @@ def _get_default_config(filename: str) -> edict:
     cfg.data = edict()
     cfg.data.data_dir = '../data/'
     cfg.data.train_dir = '../data/train/'
-    cfg.data.test_dir = '../data/train/'
+    cfg.data.test_dir = '../data/test/'
     cfg.data.train_filename = None
     cfg.data.params = edict()
 
@@ -56,7 +56,7 @@ def _get_default_config(filename: str) -> edict:
     cfg.scheduler.params = edict()
 
     cfg.loss = edict()
-    cfg.loss.name = None
+    cfg.loss.name = 'none'
 
     return cfg
 
