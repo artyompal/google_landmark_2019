@@ -35,16 +35,18 @@ def _get_default_config(filename: str) -> edict:
     cfg.train.num_folds = 5
     cfg.train.shuffle = True
     cfg.train.images_per_class = None
-    cfg.train.max_steps_per_epoch = 30000
+    cfg.train.max_steps_per_epoch = None
     cfg.train.log_freq = 100
     cfg.train.min_lr = 3e-7
     cfg.train.lr_scheduler = None
+    cfg.train.use_balancing_sampler = False
 
     cfg.val = edict()
-    cfg.val.batch_size = 64
+    cfg.val.batch_size = 64 * torch.cuda.device_count()
+    cfg.val.images_per_class = 10
 
     cfg.test = edict()
-    cfg.test.batch_size = 64
+    cfg.test.batch_size = 64 * torch.cuda.device_count()
     cfg.test.num_ttas = 1
 
     cfg.optimizer = edict()

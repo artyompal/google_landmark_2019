@@ -7,7 +7,6 @@ model:
 
 train:
     images_per_class: 200
-    use_balancing_sampler: true
 
 val:
     images_per_class: 10

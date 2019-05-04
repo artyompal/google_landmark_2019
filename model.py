@@ -39,6 +39,7 @@ from easydict import EasyDict as edict
 import parse_config
 
 from data_loader import ImageDataset
+from balancing_sampler import BalancingSampler
 from utils import create_logger, AverageMeter
 from debug import dprint
 
@@ -59,6 +60,11 @@ def load_data(fold: int) -> Any:
     train_df = pd.read_csv(os.path.join(config.data.data_dir, fname + 'train.csv'))
     val_df = pd.read_csv(os.path.join(config.data.data_dir, fname + 'val.csv'))
     print('train_df', train_df.shape, 'val_df', val_df.shape)
+
+    val_df = pd.concat([c[1].iloc[:config.val.images_per_class]
+                        for c in val_df.groupby('landmark_id')])
+    print('val_df after class filtering', val_df.shape)
+
     test_df = pd.read_csv('../data/test.csv')
 
     label_encoder = LabelEncoder()
@@ -69,7 +75,7 @@ def load_data(fold: int) -> Any:
     train_df.landmark_id = label_encoder.transform(train_df.landmark_id)
     val_df.landmark_id = label_encoder.transform(val_df.landmark_id)
 
-    transform_train = albu.HorizontalFlip(.5)
+    transform_train = albu.HorizontalFlip(0.5)
 
     if config.test.num_ttas > 1:
         transform_test = albu.Compose([
@@ -98,15 +104,25 @@ def load_data(fold: int) -> Any:
                                 image_size=config.model.image_size,
                                 num_classes=config.model.num_classes)
 
+
+    if config.train.use_balancing_sampler:
+        sampler = BalancingSampler(train_df, num_classes=config.model.num_classes,
+                                   images_per_class=config.train.images_per_class)
+        shuffle = False
+    else:
+        sampler = None
+        shuffle = config.train.shuffle
+
     train_loader = DataLoader(train_dataset, batch_size=config.train.batch_size,
-                              shuffle=config.train.shuffle, num_workers=
-                              config.num_workers, drop_last=True)
+                              sampler=sampler, shuffle=shuffle,
+                              num_workers=config.num_workers, drop_last=True)
 
     val_loader = DataLoader(val_dataset, batch_size=config.val.batch_size,
                             shuffle=False, num_workers=config.num_workers)
 
     test_loader = DataLoader(test_dataset, batch_size=config.test.batch_size,
                              shuffle=False, num_workers=config.num_workers)
+
 
     return train_loader, val_loader, test_loader, label_encoder
 
@@ -148,7 +164,10 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
 
     model.train()
 
-    num_steps = min(len(train_loader), config.train.max_steps_per_epoch)
+    num_steps = len(train_loader)
+    if config.train.max_steps_per_epoch is not None:
+        num_steps = min(len(train_loader), config.train.max_steps_per_epoch)
+
     print('total batches:', num_steps)
 
     threshold = 0.1
