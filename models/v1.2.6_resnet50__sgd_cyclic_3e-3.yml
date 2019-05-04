@@ -13,14 +13,12 @@ val:
     images_per_class: 10
 
 optimizer:
-    name: 'adam'
-    params:
-        lr: 0.0003
+    name: 'sgd'
 
 scheduler:
     name: 'cyclic_lr'
     params:
-        max_lr: 0.001
+        max_lr: 0.003
         base_lr: 0.0001
 
 loss:

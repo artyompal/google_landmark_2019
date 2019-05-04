@@ -13,15 +13,14 @@ val:
     images_per_class: 10
 
 optimizer:
-    name: 'adam'
-    params:
-        lr: 0.0003
+    name: 'sgd'
 
 scheduler:
     name: 'cyclic_lr'
     params:
-        max_lr: 0.0003
-        base_lr: 0.00005
+        max_lr: 0.003
+        base_lr: 0.0001
+        step_size_up: 4000
 
 loss:
     name: 'cross_entropy'

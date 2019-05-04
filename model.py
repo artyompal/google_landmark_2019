@@ -358,7 +358,7 @@ def run() -> float:
         score = validate(val_loader, model, epoch)
 
         if not is_scheduler_continuous():
-            lr_scheduler.step(score)    # type: ignore
+            lr_scheduler.step(score)
 
         is_best = score > best_score
         best_score = max(score, best_score)
