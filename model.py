@@ -327,8 +327,8 @@ def run() -> float:
 
         if args.lr_override != 0:
             set_lr(optimizer, float(args.lr_override))
-        elif 'lr' in config.train.scheduler.params:
-            set_lr(optimizer, config.train.scheduler.params.lr)
+        elif 'lr' in config.scheduler.params:
+            set_lr(optimizer, config.scheduler.params.lr)
 
     if args.predict:
         print('inference mode')
