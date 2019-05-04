@@ -1,0 +1,23 @@
+data:
+    train_filename: '100_samples_6516_classes'
+
+model:
+    arch: 'resnet50'
+    num_classes: 1672
+
+train:
+    images_per_class: 100
+
+val:
+    images_per_class: 10
+
+optimizer:
+    name: 'adam'
+    params:
+        lr: 0.0003
+
+scheduler:
+    name: 'reduce_lr_on_plateau'
+
+loss:
+    name: 'cross_entropy'
