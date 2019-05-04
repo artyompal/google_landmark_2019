@@ -4,15 +4,17 @@ import multiprocessing
 import os
 import yaml
 
+from typing import Any
+
 import torch
 from easydict import EasyDict as edict
 
 
-def _get_default_config(filename: str) -> edict:
+def _get_default_config(filename: str, args: Any) -> edict:
     cfg = edict()
     cfg.in_kernel = False
     cfg.version = os.path.splitext(os.path.basename(filename))[0]
-    cfg.experiment_dir = f'../models/{cfg.version}'
+    cfg.experiment_dir = f'../models/{cfg.version}/fold_{args.fold}/'
     cfg.num_workers = min(12, multiprocessing.cpu_count())
 
     cfg.data = edict()
@@ -72,11 +74,11 @@ def _merge_config(src: edict, dst: edict) -> edict:
         else:
             dst[k] = v
 
-def load(config_path: str) -> edict:
+def load(config_path: str, args: Any) -> edict:
     with open(config_path) as f:
         yaml_config = edict(yaml.load(f, Loader=yaml.SafeLoader))
 
-    config = _get_default_config(config_path)
+    config = _get_default_config(config_path, args)
     _merge_config(yaml_config, config)
 
     return config

@@ -1,0 +1,27 @@
+data:
+    train_filename: '50_samples_18425_classes'
+
+model:
+    arch: 'resnet50'
+    num_classes: 18425
+
+train:
+    images_per_class: 50
+    max_steps_per_epoch: 15000
+
+val:
+    images_per_class: 10
+
+optimizer:
+    name: 'adam'
+    params:
+        lr: 0.0003
+
+scheduler:
+    name: 'cyclic_lr'
+    params:
+        max_lr: 0.0003
+        base_lr: 0.00005
+
+loss:
+    name: 'cross_entropy'

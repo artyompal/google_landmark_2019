@@ -393,7 +393,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr_override', help='override learning rate', type=float, default=0)
     args = parser.parse_args()
 
-    config = parse_config.load(args.config)
+    config = parse_config.load(args.config, args)
 
     if not os.path.exists(config.experiment_dir):
         os.makedirs(config.experiment_dir)
