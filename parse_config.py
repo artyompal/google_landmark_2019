@@ -74,7 +74,7 @@ def _merge_config(src: edict, dst: edict) -> edict:
 
 def load(config_path: str) -> edict:
     with open(config_path) as f:
-        yaml_config = edict(yaml.load(f))
+        yaml_config = edict(yaml.load(f, Loader=yaml.SafeLoader))
 
     config = _get_default_config(config_path)
     _merge_config(yaml_config, config)
