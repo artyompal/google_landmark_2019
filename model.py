@@ -168,10 +168,11 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
     if config.train.max_steps_per_epoch is not None:
         num_steps = min(len(train_loader), config.train.max_steps_per_epoch)
 
-    print('total batches:', num_steps)
+    logger.info(f'total batches: {num_steps}')
 
     threshold = 0.1
     end = time.time()
+    lr_str = ''
 
     for i, (input_, target) in enumerate(train_loader):
         if i >= num_steps:
@@ -193,6 +194,7 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
 
         if is_scheduler_continuous():
             lr_scheduler.step()
+            lr_str = '\tlr {read_lr(optimizer):.08f}'
 
         # measure elapsed time
         batch_time.update(time.time() - end)
@@ -202,7 +204,8 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
             logger.info(f'{epoch} [{i}/{num_steps}]\t'
                         f'time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                         f'loss {losses.val:.4f} ({losses.avg:.4f})\t'
-                        f'GAP {avg_score.val:.4f} ({avg_score.avg:.4f})')
+                        f'GAP {avg_score.val:.4f} ({avg_score.avg:.4f})'
+                        + lr_str)
 
     logger.info(f' * average GAP on train {avg_score.avg:.4f}')
 
