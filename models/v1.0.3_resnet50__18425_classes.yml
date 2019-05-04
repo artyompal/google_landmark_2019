@@ -3,7 +3,7 @@ data:
 
 model:
     arch: 'resnet50'
-    num_classes: 1672
+    num_classes: 18425
 
 train:
     images_per_class: 50
