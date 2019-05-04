@@ -47,6 +47,7 @@ from losses import get_loss
 from schedulers import get_scheduler
 from optimizers import get_optimizer
 from metrics import GAP
+from random_rect_crop import RandomRectCrop
 
 
 def load_data(fold: int) -> Any:
@@ -75,17 +76,24 @@ def load_data(fold: int) -> Any:
     train_df.landmark_id = label_encoder.transform(train_df.landmark_id)
     val_df.landmark_id = label_encoder.transform(val_df.landmark_id)
 
-    transform_train = albu.HorizontalFlip(0.5)
+    augs = []
+
+    if config.data.use_rect_crop:
+        augs.append(RandomRectCrop(rect_min_area=config.data.rect_min_area,
+                                   rect_min_ratio=config.data.rect_min_ratio,
+                                   image_size=config.model.image_size,
+                                   input_size=config.model.input_size))
+
+    augs.append(albu.HorizontalFlip(0.5))
+    transform_train = albu.Compose(augs)
 
     if config.test.num_ttas > 1:
         transform_test = albu.Compose([
-            albu.PadIfNeeded(config.model.input_size, config.model.input_size),
             albu.RandomCrop(height=config.model.input_size, width=config.model.input_size),
             albu.HorizontalFlip(),
         ])
     else:
         transform_test = albu.Compose([
-            albu.PadIfNeeded(config.model.input_size, config.model.input_size),
             albu.CenterCrop(height=config.model.input_size, width=config.model.input_size),
         ])
 

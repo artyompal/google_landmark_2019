@@ -14,13 +14,11 @@ val:
 
 optimizer:
     name: 'sgd'
+    params:
+        lr: 0.001
 
 scheduler:
-    name: 'cyclic_lr'
-    params:
-        max_lr: 0.003
-        base_lr: 0.0001
-        step_size_up: 4000
+    name: 'reduce_lr_on_plateau'
 
 loss:
     name: 'cross_entropy'

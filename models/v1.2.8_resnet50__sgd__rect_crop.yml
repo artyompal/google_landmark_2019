@@ -1,5 +1,8 @@
 data:
     train_filename: '50_samples_18425_classes'
+    use_rect_crop: true
+    rect_min_area: 0.08
+    rect_min_ratio: 0.75
 
 model:
     arch: 'resnet50'

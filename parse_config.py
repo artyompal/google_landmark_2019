@@ -22,6 +22,9 @@ def _get_default_config(filename: str, args: Any) -> edict:
     cfg.data.train_dir = '../data/train/'
     cfg.data.test_dir = '../data/test/'
     cfg.data.train_filename = None
+    cfg.data.use_rect_crop = False
+    cfg.data.rect_min_area = 0.1
+    cfg.data.rect_min_ratio = 0.75
     cfg.data.params = edict()
 
     cfg.model = edict()
