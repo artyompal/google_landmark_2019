@@ -1,0 +1,29 @@
+data:
+    train_filename: '50_samples_18425_classes'
+    use_rect_crop: true
+    rect_min_area: 0.25
+    rect_min_ratio: 0.75
+
+model:
+    arch: 'resnet50'
+    num_classes: 18425
+
+train:
+    images_per_class: 50
+    max_steps_per_epoch: 15000
+
+val:
+    images_per_class: 3
+
+optimizer:
+    name: 'sgd'
+
+scheduler:
+    name: 'cyclic_lr'
+    params:
+        max_lr: 0.003
+        base_lr: 0.0001
+        step_size_up: 4000
+
+loss:
+    name: 'cross_entropy'
