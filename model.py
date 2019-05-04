@@ -84,6 +84,21 @@ def load_data(fold: int) -> Any:
                                    image_size=config.model.image_size,
                                    input_size=config.model.input_size))
 
+    if config.augmentations.blur != 0:
+        augs.append(albu.OneOf([
+            albu.MotionBlur(p=.2),
+            albu.MedianBlur(blur_limit=3, p=0.1),
+            albu.Blur(blur_limit=3, p=0.1),
+        ], p=config.augmentations.blur))
+
+    if config.augmentations.color != 0:
+        augs.append(albu.OneOf([
+            albu.CLAHE(clip_limit=2),
+            albu.IAASharpen(),
+            albu.IAAEmboss(),
+            albu.RandomBrightnessContrast(),
+        ], p=config.augmentations.color))
+
     augs.append(albu.HorizontalFlip(0.5))
     transform_train = albu.Compose(augs)
 

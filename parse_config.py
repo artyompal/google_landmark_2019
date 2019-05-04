@@ -27,6 +27,10 @@ def _get_default_config(filename: str, args: Any) -> edict:
     cfg.data.rect_min_ratio = 0.75
     cfg.data.params = edict()
 
+    cfg.augmentations = edict()
+    cfg.augmentations.blur = 0
+    cfg.augmentations.color = 0
+
     cfg.model = edict()
     cfg.model.arch = 'resnet50'
     cfg.model.image_size = 256
