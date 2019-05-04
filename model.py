@@ -194,7 +194,7 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
 
         if is_scheduler_continuous():
             lr_scheduler.step()
-            lr_str = '\tlr {read_lr(optimizer):.08f}'
+            lr_str = f'\tlr {get_lr(optimizer):.08f}'
 
         # measure elapsed time
         batch_time.update(time.time() - end)
@@ -280,10 +280,9 @@ def set_lr(optimizer: Any, lr: float) -> None:
        param_group['lr'] = lr
        param_group['initial_lr'] = lr
 
-def read_lr(optimizer: Any) -> float:
+def get_lr(optimizer: Any) -> float:
     for param_group in optimizer.param_groups:
        lr = float(param_group['lr'])
-       logger.info(f'learning rate: {lr}')
        return lr
 
     assert False
@@ -332,7 +331,7 @@ def run() -> float:
     best_score = 0.0
     best_epoch = 0
 
-    last_lr = read_lr(optimizer)
+    last_lr = get_lr(optimizer)
     best_model_path = None
 
     for epoch in range(last_epoch + 1, config.train.num_epochs + 1):
@@ -340,7 +339,7 @@ def run() -> float:
 
         if not is_scheduler_continuous():
             # if we have just reduced LR, reload the best saved model
-            lr = read_lr(optimizer)
+            lr = get_lr(optimizer)
 
             if lr < last_lr - 1e-10 and best_model_path is not None:
                 last_checkpoint = torch.load(os.path.join(model_dir, best_model_path))
@@ -355,7 +354,7 @@ def run() -> float:
                 logger.info('reached minimum LR, stopping')
                 break
 
-        read_lr(optimizer)
+        get_lr(optimizer)
 
         train(train_loader, model, criterion, optimizer, epoch, lr_scheduler)
         score = validate(val_loader, model, epoch)
