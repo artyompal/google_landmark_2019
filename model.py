@@ -134,6 +134,9 @@ def load_data(fold: int) -> Any:
                                     image_size=config.model.image_size,
                                     num_classes=config.model.num_classes)
     else:
+        train_df = pd.read_csv(os.path.join(config.data.data_dir, 'train.csv'))
+        train_df.drop(columns=['url', 'landmark_id'], inplace=True)
+
         test_dataset = ImageDataset(train_df, path=config.data.train_dir, mode='test',
                                     image_size=config.model.image_size,
                                     num_classes=config.model.num_classes)
