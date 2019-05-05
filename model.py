@@ -67,6 +67,13 @@ def load_data(fold: int) -> Any:
     print('val_df after class filtering', val_df.shape)
 
     test_df = pd.read_csv('../data/test.csv')
+    print('test_df', test_df.shape)
+
+    test_df = test_df.loc[test_df.id.apply(lambda img: os.path.exists(os.path.join(
+        config.data.test_dir, img + '.jpg')))]
+    print('test_df after filtering', test_df.shape)
+
+    test_df = test_df.iloc[:3200]
 
     label_encoder = LabelEncoder()
     label_encoder.fit(train_df.landmark_id.values)
@@ -350,7 +357,7 @@ def run() -> float:
     if args.predict:
         print('inference mode')
         generate_submission(val_loader, test_loader, model, label_encoder,
-                            last_epoch, args.pretrained)
+                            last_epoch, args.weights)
         sys.exit(0)
 
     best_score = 0.0
