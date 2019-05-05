@@ -213,7 +213,7 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
 
         # get metric
         confs, predicts = torch.max(output.detach(), dim=1)
-        avg_score.update(GAP(predicts, confs, target, threshold))
+        avg_score.update(GAP(predicts, confs, target))
 
         # compute gradient and do SGD step
         losses.update(loss.data.item(), input_.size(0))
