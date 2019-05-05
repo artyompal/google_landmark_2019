@@ -69,7 +69,7 @@ class ImageDataset(torch.utils.data.Dataset):
         image = self.transforms(image)
 
         if self.mode == 'test':
-            return image, ''
+            return image
         else:
             return image, self.df.landmark_id.values[index]
 

@@ -247,7 +247,12 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, torch.Tensor,
     all_predicts, all_confs, all_targets = [], [], []
 
     with torch.no_grad():
-        for i, (input_, target) in enumerate(tqdm(data_loader, disable=config.in_kernel)):
+        for i, data in enumerate(tqdm(data_loader, disable=config.in_kernel)):
+            if data_loader.dataset.mode != 'test':
+                input_, target = data
+            else:
+                input_, target = data, None
+
             if config.test.num_ttas != 1 and data_loader.dataset.mode == 'test':
                 bs, ncrops, c, h, w = input_.size()
                 input_ = input_.view(-1, c, h, w) # fuse batch size and ncrops
@@ -274,7 +279,7 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, torch.Tensor,
 
     predicts = torch.cat(all_predicts)
     confs = torch.cat(all_confs)
-    targets = torch.cat(all_targets)
+    targets = torch.cat(all_targets) if len(all_targets) else None
 
     return predicts, confs, targets
 
@@ -296,6 +301,7 @@ def validate(val_loader: Any, model: Any, epoch: int) -> float:
 def generate_submission(val_loader: Any, test_loader: Any, model: Any,
                         label_encoder: Any, epoch: int, model_path: Any) -> np.ndarray:
     predicts, confs, _ = inference(test_loader, model)
+    predicts, confs = predicts.cpu().numpy(), confs.cpu().numpy()
 
     labels = [label_encoder.inverse_transform(pred) for pred in predicts]
     print('labels')
