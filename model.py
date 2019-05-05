@@ -258,7 +258,7 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, torch.Tensor,
                 output = model(input_.cuda())
                 output = activation(output)
 
-            confs, predicts = torch.max(output, dim=1)
+            confs, predicts = torch.topk(output, config.test.num_predicts)
             all_confs.append(confs)
             all_predicts.append(predicts)
 
@@ -279,8 +279,8 @@ def validate(val_loader: Any, model: Any, epoch: int) -> float:
     logger.info('validate()')
 
     predicts, confs, targets = inference(val_loader, model)
-    threshold = 0.1
-    score = GAP(predicts, confs, targets, threshold)
+    predicts, confs = predicts[:, 0], confs[:, 0] # FIXME: use config.test.num_predicts?
+    score = GAP(predicts, confs, targets)
 
     logger.info(f'{epoch} GAP {score:.4f}')
     logger.info(f' * GAP on validation {score:.4f}')
@@ -293,6 +293,8 @@ def generate_submission(val_loader: Any, test_loader: Any, model: Any,
     labels = [label_encoder.inverse_transform(pred) for pred in predicts]
     print('labels')
     print(np.array(labels))
+    print('confs')
+    print(np.array(confs))
 
     sub = test_loader.dataset.df
     sub.landmark_id = labels

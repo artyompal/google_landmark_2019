@@ -57,6 +57,7 @@ def _get_default_config(filename: str, args: Any) -> edict:
     cfg.test = edict()
     cfg.test.batch_size = 64 * torch.cuda.device_count()
     cfg.test.num_ttas = 1
+    cfg.test.num_predicts = 5
 
     cfg.optimizer = edict()
     cfg.optimizer.name = 'adam'

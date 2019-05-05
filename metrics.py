@@ -18,8 +18,7 @@ def F_score(predict: torch.tensor, label: torch.tensor, beta: int,
     F2 = (1 + beta**2) * precision * recall / (beta**2 * precision + recall + 1e-12)
     return F2.mean(0)
 
-def GAP(predicts: torch.Tensor, confs: torch.Tensor, targets: torch.Tensor,
-        threshold: float) -> float:
+def GAP(predicts: torch.Tensor, confs: torch.Tensor, targets: torch.Tensor) -> float:
     ''' Computes GAP@1 '''
     if len(predicts.shape) != 1:
         dprint(predicts.shape)
