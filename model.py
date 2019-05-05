@@ -44,8 +44,8 @@ from utils import create_logger, AverageMeter
 from debug import dprint
 
 from losses import get_loss
-from schedulers import get_scheduler
-from optimizers import get_optimizer
+from schedulers import get_scheduler, is_scheduler_continuous
+from optimizers import get_optimizer, get_lr, set_lr
 from metrics import GAP
 from random_rect_crop import RandomRectCrop
 
@@ -129,10 +129,14 @@ def load_data(fold: int) -> Any:
                                image_size=config.model.image_size,
                                num_classes=config.model.num_classes)
 
-    test_dataset = ImageDataset(test_df, path=config.data.test_dir, mode='test',
-                                image_size=config.model.image_size,
-                                num_classes=config.model.num_classes)
-
+    if args.inference_data == 'test':
+        test_dataset = ImageDataset(test_df, path=config.data.test_dir, mode='test',
+                                    image_size=config.model.image_size,
+                                    num_classes=config.model.num_classes)
+    else:
+        test_dataset = ImageDataset(train_df, path=config.data.train_dir, mode='test',
+                                    image_size=config.model.image_size,
+                                    num_classes=config.model.num_classes)
 
     if config.train.use_balancing_sampler:
         sampler = BalancingSampler(train_df, num_classes=config.model.num_classes,
@@ -199,7 +203,6 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
 
     logger.info(f'total batches: {num_steps}')
 
-    threshold = 0.1
     end = time.time()
     lr_str = ''
 
@@ -221,7 +224,7 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
         loss.backward()
         optimizer.step()
 
-        if is_scheduler_continuous():
+        if is_scheduler_continuous(config.scheduler.name):
             lr_scheduler.step()
             lr_str = f'\tlr {get_lr(optimizer):.08f}'
 
@@ -238,7 +241,8 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
 
     logger.info(f' * average GAP on train {avg_score.avg:.4f}')
 
-def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, torch.Tensor,
+                                                     Optional[torch.Tensor]]:
     ''' Returns predictions and targets, if any. '''
     model.eval()
 
@@ -283,10 +287,7 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, torch.Tensor,
     return predicts, confs, targets
 
 def validate(val_loader: Any, model: Any, epoch: int) -> float:
-    ''' Calculates validation score.
-    1. Infers predictions
-    2. Finds optimal threshold
-    3. Returns the best score and a threshold. '''
+    ''' Infers predictions and calculates validation score. '''
     logger.info('validate()')
 
     predicts, confs, targets = inference(val_loader, model)
@@ -297,44 +298,36 @@ def validate(val_loader: Any, model: Any, epoch: int) -> float:
     logger.info(f' * GAP on validation {score:.4f}')
     return score
 
-def generate_submission(val_loader: Any, test_loader: Any, model: Any,
-                        label_encoder: Any, epoch: int, model_path: Any) -> np.ndarray:
-    sample_sub = pd.read_csv('../data/recognition_sample_submission.csv')
+def generate_features(test_loader: Any, model: Any, model_path: Any) -> None:
+    model.eval()
 
-    predicts, confs, _ = inference(test_loader, model)
-    predicts, confs = predicts.cpu().numpy(), confs.cpu().numpy()
+    all_features = []
+    max_num_of_samples = 500000
+    max_batches = max_num_of_samples // config.test.batch_size
+    part_idx = 0
 
-    labels = [label_encoder.inverse_transform(pred) for pred in predicts]
-    print('labels')
-    print(np.array(labels))
-    print('confs')
-    print(np.array(confs))
+    with torch.no_grad():
+        for i, data in enumerate(tqdm(test_loader, disable=config.in_kernel)):
+            input_, target = data, None
 
-    sub = test_loader.dataset.df
-    def concat(label, conf):
-        return ' '.join([f'{L} {c}' for L, c in zip(label, conf)])
-    sub['landmarks'] = [concat(label, conf) for label, conf in zip(labels, confs)]
+            if config.test.num_ttas != 1 and test_loader.dataset.mode == 'test':
+                bs, ncrops, c, h, w = input_.size()
+                input_ = input_.view(-1, c, h, w) # fuse batch size and ncrops
 
-    sample_sub = sample_sub.set_index('id')
-    sub = sub.set_index('id')
-    sample_sub.update(sub)
+                features = model.features(input_)
+                features = features.view(bs, ncrops, -1).mean(1)
+            else:
+                features = model.features(input_)
 
-    sample_sub.to_csv(f'../submissions/{os.path.basename(model_path)[:-4]}.csv')
+            all_features.append(features)
 
-def set_lr(optimizer: Any, lr: float) -> None:
-    for param_group in optimizer.param_groups:
-       param_group['lr'] = lr
-       param_group['initial_lr'] = lr
+            if len(all_features) == max_batches or i == len(test_loader) - 1:
+                all_features = torch.cat(all_features).cpu().numpy()
+                model_name = os.path.basename(model_path)[:-4]
+                np.save(f'{args.dataset}_{model_name}_part{part_idx:02d}.npy', all_features)
 
-def get_lr(optimizer: Any) -> float:
-    for param_group in optimizer.param_groups:
-       lr = float(param_group['lr'])
-       return lr
-
-    assert False
-
-def is_scheduler_continuous() -> bool:
-    return config.scheduler.name in ['exponential', 'cosine', 'cyclic_lr']
+                part_idx += 1
+                all_features = []
 
 def run() -> float:
     np.random.seed(0)
@@ -370,8 +363,7 @@ def run() -> float:
 
     if args.predict:
         print('inference mode')
-        generate_submission(val_loader, test_loader, model, label_encoder,
-                            last_epoch, args.weights)
+        generate_features(test_loader, model, args.weights)
         sys.exit(0)
 
     best_score = 0.0
@@ -383,7 +375,7 @@ def run() -> float:
     for epoch in range(last_epoch + 1, config.train.num_epochs + 1):
         logger.info('-' * 50)
 
-        if not is_scheduler_continuous():
+        if not is_scheduler_continuous(config.scheduler.name):
             # if we have just reduced LR, reload the best saved model
             lr = get_lr(optimizer)
 
@@ -405,7 +397,7 @@ def run() -> float:
         train(train_loader, model, criterion, optimizer, epoch, lr_scheduler)
         score = validate(val_loader, model, epoch)
 
-        if not is_scheduler_continuous():
+        if not is_scheduler_continuous(config.scheduler.name):
             lr_scheduler.step(score)
 
         is_best = score > best_score
@@ -435,6 +427,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', help='model configuration file (YAML)', type=str, required=True)
     parser.add_argument('--weights', help='model to resume training', type=str)
+    parser.add_argument('--inference_data', help='dataset for prediction, train/test',
+                        type=str, default='test')
     parser.add_argument('--fold', help='fold number', type=int, default=0)
     parser.add_argument('--predict', help='model to resume training', action='store_true')
     parser.add_argument('--show_summary', help='show model summary', action='store_true')

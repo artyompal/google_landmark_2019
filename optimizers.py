@@ -19,3 +19,15 @@ def sgd(parameters, lr=0.001, momentum=0.9, weight_decay=0, nesterov=True, **_):
 def get_optimizer(config, parameters):
     f = globals().get(config.optimizer.name)
     return f(parameters, **config.optimizer.params)
+
+def set_lr(optimizer: Any, lr: float) -> None:
+    for param_group in optimizer.param_groups:
+       param_group['lr'] = lr
+       param_group['initial_lr'] = lr
+
+def get_lr(optimizer: Any) -> float:
+    for param_group in optimizer.param_groups:
+       lr = float(param_group['lr'])
+       return lr
+
+    assert False
