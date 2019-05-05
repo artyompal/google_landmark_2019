@@ -129,7 +129,7 @@ def load_data(fold: int) -> Any:
                                image_size=config.model.image_size,
                                num_classes=config.model.num_classes)
 
-    if args.inference_data == 'test':
+    if args.dataset == 'test':
         test_dataset = ImageDataset(test_df, path=config.data.test_dir, mode='test',
                                     image_size=config.model.image_size,
                                     num_classes=config.model.num_classes)
@@ -168,6 +168,9 @@ class Model(nn.Module):
 
         self.model.features[-1] = nn.AdaptiveAvgPool2d(1)
         self.model.output = nn.Linear(self.model.output.in_features, config.model.num_classes)
+
+    def features(self, images: torch.Tensor) -> torch.Tensor:
+        return self.model.features(images)
 
     def forward(self, images: torch.Tensor) -> torch.Tensor:
         return self.model.forward(images)
@@ -260,7 +263,7 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, torch.Tensor,
                 bs, ncrops, c, h, w = input_.size()
                 input_ = input_.view(-1, c, h, w) # fuse batch size and ncrops
 
-                output = model(input_)
+                output = model(input_.cuda())
                 output = activation(output)
 
                 if config.test.tta_combine_func == 'max':
@@ -314,17 +317,17 @@ def generate_features(test_loader: Any, model: Any, model_path: Any) -> None:
                 bs, ncrops, c, h, w = input_.size()
                 input_ = input_.view(-1, c, h, w) # fuse batch size and ncrops
 
-                features = model.features(input_)
+                features = model.module.features(input_.cuda())
                 features = features.view(bs, ncrops, -1).mean(1)
             else:
-                features = model.features(input_)
+                features = model.module.features(input_.cuda())
 
             all_features.append(features)
 
             if len(all_features) == max_batches or i == len(test_loader) - 1:
                 all_features = torch.cat(all_features).cpu().numpy()
                 model_name = os.path.basename(model_path)[:-4]
-                np.save(f'{args.dataset}_{model_name}_part{part_idx:02d}.npy', all_features)
+                np.save(f'../features/{args.dataset}_{model_name}_part{part_idx:02d}.npy', all_features)
 
                 part_idx += 1
                 all_features = []
@@ -427,7 +430,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', help='model configuration file (YAML)', type=str, required=True)
     parser.add_argument('--weights', help='model to resume training', type=str)
-    parser.add_argument('--inference_data', help='dataset for prediction, train/test',
+    parser.add_argument('--dataset', help='dataset for prediction, train/test',
                         type=str, default='test')
     parser.add_argument('--fold', help='fold number', type=int, default=0)
     parser.add_argument('--predict', help='model to resume training', action='store_true')
