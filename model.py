@@ -66,14 +66,13 @@ def load_data(fold: int) -> Any:
                         for c in val_df.groupby('landmark_id')])
     print('val_df after class filtering', val_df.shape)
 
-    test_df = pd.read_csv('../data/test.csv')
+    test_df = pd.read_csv('../data/test.csv', dtype=str)
+    test_df.drop(columns='url', inplace=True)
     print('test_df', test_df.shape)
 
     test_df = test_df.loc[test_df.id.apply(lambda img: os.path.exists(os.path.join(
         config.data.test_dir, img + '.jpg')))]
     print('test_df after filtering', test_df.shape)
-
-    test_df = test_df.iloc[:3200]
 
     label_encoder = LabelEncoder()
     label_encoder.fit(train_df.landmark_id.values)
@@ -300,6 +299,8 @@ def validate(val_loader: Any, model: Any, epoch: int) -> float:
 
 def generate_submission(val_loader: Any, test_loader: Any, model: Any,
                         label_encoder: Any, epoch: int, model_path: Any) -> np.ndarray:
+    sample_sub = pd.read_csv('../data/recognition_sample_submission.csv')
+
     predicts, confs, _ = inference(test_loader, model)
     predicts, confs = predicts.cpu().numpy(), confs.cpu().numpy()
 
@@ -310,8 +311,15 @@ def generate_submission(val_loader: Any, test_loader: Any, model: Any,
     print(np.array(confs))
 
     sub = test_loader.dataset.df
-    sub.landmark_id = labels
-    sub.to_csv(f'../submissions/{os.path.basename(model_path)[:-4]}.csv', index=False)
+    def concat(label, conf):
+        return ' '.join([f'{L} {c}' for L, c in zip(label, conf)])
+    sub['landmarks'] = [concat(label, conf) for label, conf in zip(labels, confs)]
+
+    sample_sub = sample_sub.set_index('id')
+    sub = sub.set_index('id')
+    sample_sub.update(sub)
+
+    sample_sub.to_csv(f'../submissions/{os.path.basename(model_path)[:-4]}.csv')
 
 def set_lr(optimizer: Any, lr: float) -> None:
     for param_group in optimizer.param_groups:
