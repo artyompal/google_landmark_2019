@@ -342,6 +342,30 @@ def generate_features(test_loader: Any, model: Any, model_path: Any) -> None:
                 part_idx += 1
                 all_features = []
 
+def generate_submission(val_loader: Any, test_loader: Any, model: Any,
+                        label_encoder: Any, epoch: int, model_path: Any) -> np.ndarray:
+    sample_sub = pd.read_csv('../data/recognition_sample_submission.csv')
+
+    predicts, confs, _ = inference(test_loader, model)
+    predicts, confs = predicts.cpu().numpy(), confs.cpu().numpy()
+
+    labels = [label_encoder.inverse_transform(pred) for pred in predicts]
+    print('labels')
+    print(np.array(labels))
+    print('confs')
+    print(np.array(confs))
+
+    sub = test_loader.dataset.df
+    def concat(label, conf):
+        return ' '.join([f'{L} {c}' for L, c in zip(label, conf)])
+    sub['landmarks'] = [concat(label, conf) for label, conf in zip(labels, confs)]
+
+    sample_sub = sample_sub.set_index('id')
+    sub = sub.set_index('id')
+    sample_sub.update(sub)
+
+    sample_sub.to_csv(f'../submissions/{os.path.basename(model_path)[:-4]}.csv')
+
 def run() -> float:
     np.random.seed(0)
     model_dir = config.experiment_dir
@@ -375,6 +399,12 @@ def run() -> float:
             set_lr(optimizer, config.scheduler.params.lr)
 
     if args.predict:
+        print('inference mode')
+        generate_submission(val_loader, test_loader, model, label_encoder,
+                            last_epoch, args.weights)
+        sys.exit(0)
+
+    if args.calc_features:
         print('inference mode')
         generate_features(test_loader, model, args.weights)
         sys.exit(0)
@@ -444,7 +474,8 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', help='dataset for prediction, train/test',
                         type=str, default='test')
     parser.add_argument('--fold', help='fold number', type=int, default=0)
-    parser.add_argument('--predict', help='model to resume training', action='store_true')
+    parser.add_argument('--predict', help='make predictions for the testset and return', action='store_true')
+    parser.add_argument('--calc_features', help='calculate features for the given set', action='store_true')
     parser.add_argument('--summary', help='show model summary', action='store_true')
     parser.add_argument('--lr_override', help='override learning rate', type=float, default=0)
     args = parser.parse_args()
@@ -454,6 +485,7 @@ if __name__ == '__main__':
     if not os.path.exists(config.experiment_dir):
         os.makedirs(config.experiment_dir)
 
-    log_filename = 'log_training.txt' if not args.predict else 'log_predict.txt'
+    log_filename = 'log_training.txt' if not args.predict and \
+                   not args.calc_features else 'log_predict.txt'
     logger = create_logger(os.path.join(config.experiment_dir, log_filename))
     run()
