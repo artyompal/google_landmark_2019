@@ -10,19 +10,23 @@ from typing import *
 import numpy as np
 import faiss
 
+from scipy.stats import describe
 from tqdm import tqdm
 from debug import dprint
 
 K = 20
 RESULTS_DIR = '../predicts'
 USE_GPU = True
+USE_COSINE_DIST = False
 
 def search_against_fragment(train_features: np.ndarray, test_features: np.ndarray) \
     -> Tuple[np.ndarray, np.ndarray]:
     if USE_GPU:
         # build a flat index (CPU)
-        # index_flat = faiss.IndexFlat(d, faiss.METRIC_INNER_PRODUCT)
-        index_flat = faiss.IndexFlat(d, faiss.METRIC_INNER_PRODUCT)
+        if USE_COSINE_DIST:
+            index_flat = faiss.IndexFlat(d, faiss.METRIC_INNER_PRODUCT)
+        else:
+            index_flat = faiss.IndexFlatL2(d)
 
         # make it into a GPU index
         index_flat = faiss.index_cpu_to_gpu(res, 0, index_flat)
@@ -41,6 +45,7 @@ def search_against_fragment(train_features: np.ndarray, test_features: np.ndarra
     distances, index = index_flat.search(test_features, K)  # actual search
     dprint(index)
     dprint(distances)
+    dprint(describe(distances.flatten()))
     return index, distances
 
 def merge_results(index1: np.ndarray, distances1: np.ndarray, index2: np.ndarray,
@@ -59,13 +64,14 @@ def merge_results(index1: np.ndarray, distances1: np.ndarray, index2: np.ndarray
     best_distances = np.zeros((index1.shape[0], K), dtype=np.float32)
 
     for sample in range(joint_index.shape[0]):
-        closest_indices = np.argsort(joint_distances[sample, :])
-        best_indices[sample, :] = joint_index[sample, closest_indices][:K]
-        best_distances[sample, :] = joint_distances[sample, closest_indices][:K]
+        closest_indices = np.argsort(joint_distances[sample])[:K]
+        best_indices[sample] = joint_index[sample, closest_indices]
+        best_distances[sample] = joint_distances[sample, closest_indices]
 
     print("best_indices", best_indices.shape, "best_distances", best_distances.shape)
     dprint(best_indices)
     dprint(best_distances)
+    dprint(describe(best_distances))
     return best_indices, best_distances
 
 if __name__ == "__main__":
@@ -86,7 +92,8 @@ if __name__ == "__main__":
     print("will save results to", result_fname)
 
     test_features = np.squeeze(np.load(test_fname))
-    test_features /= (np.linalg.norm(test_features, axis=1, keepdims=True) + 1e-8)
+    if USE_COSINE_DIST:
+        test_features /= (np.linalg.norm(test_features, axis=1, keepdims=True) + 1e-8)
 
     print(test_features.shape)
     print(test_features)
@@ -103,7 +110,10 @@ if __name__ == "__main__":
     for fragment in tqdm(train_fnames):
         train_features = np.load(fragment)
         train_features = train_features.reshape(train_features.shape[0], -1)
-        train_features /= (np.linalg.norm(train_features, axis=1, keepdims=True) + 1e-8)
+
+        if USE_COSINE_DIST:
+            train_features /= (np.linalg.norm(train_features, axis=1, keepdims=True) + 1e-8)
+
         print("features shape", train_features.shape)
         idx, dist = search_against_fragment(train_features, test_features)
         idx += offset
