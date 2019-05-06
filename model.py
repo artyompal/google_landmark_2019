@@ -170,7 +170,14 @@ class Model(nn.Module):
         assert config.model.input_size % 32 == 0
 
         self.model.features[-1] = nn.AdaptiveAvgPool2d(1)
-        self.model.output = nn.Linear(self.model.output.in_features, config.model.num_classes)
+        in_features = self.model.output.in_features
+
+        if config.model.bottleneck_width is not None:
+            self.model.output = nn.Sequential(
+                nn.Linear(in_features, config.model.bottleneck_fc),
+                nn.Linear(config.model.bottleneck_fc, config.model.num_classes))
+        else:
+            self.model.output = nn.Linear(in_features, config.model.num_classes)
 
     def features(self, images: torch.Tensor) -> torch.Tensor:
         return self.model.features(images)

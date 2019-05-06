@@ -1,0 +1,30 @@
+data:
+    train_filename: '30_samples_34663_classes'
+    use_rect_crop: true
+    rect_min_area: 0.08
+    rect_min_ratio: 0.75
+
+model:
+    arch: 'seresnext50_32x4d'
+    num_classes: 34663
+    bottleneck_fc: 1024
+
+train:
+    images_per_class: 50
+    max_steps_per_epoch: 15000
+
+val:
+    images_per_class: 3
+
+optimizer:
+    name: 'sgd'
+
+scheduler:
+    name: 'cyclic_lr'
+    params:
+        max_lr: 0.003
+        base_lr: 0.0001
+        step_size_up: 4000
+
+loss:
+    name: 'cross_entropy'
