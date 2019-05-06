@@ -384,6 +384,7 @@ def run() -> float:
         if not is_scheduler_continuous(config.scheduler.name):
             # if we have just reduced LR, reload the best saved model
             lr = get_lr(optimizer)
+            logger.info(f'learning rate {lr}')
 
             if lr < last_lr - 1e-10 and best_model_path is not None:
                 last_checkpoint = torch.load(os.path.join(model_dir, best_model_path))
