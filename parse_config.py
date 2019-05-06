@@ -36,7 +36,7 @@ def _get_default_config(filename: str, args: Any) -> edict:
     cfg.model.image_size = 256
     cfg.model.input_size = 224
     cfg.model.num_classes = None
-    cfg.model.botleneck_fc = None
+    cfg.model.bottleneck_fc = None
     cfg.model.dropout = 0
 
     cfg.train = edict()
