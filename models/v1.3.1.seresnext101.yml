@@ -5,7 +5,7 @@ data:
     rect_min_ratio: 0.75
 
 model:
-    arch: 'seresnext101_64x4d'
+    arch: 'seresnext101_32x4d'
     num_classes: 18425
 
 train:
