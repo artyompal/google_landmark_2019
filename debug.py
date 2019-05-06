@@ -14,7 +14,7 @@ def dprint(*args: Any) -> None:
     if m:
         print(f'{name}:{frame.f_lineno}', m.group(1), *args)
     else:
-        assert False
+        print(f'{name}:{frame.f_lineno} dprint() parse error')
 
 def assert_eq(*args: Any) -> None:
     assert len(args) == 2

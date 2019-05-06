@@ -192,7 +192,7 @@ def create_model() -> Any:
     model = torch.nn.DataParallel(model).cuda()
     model.cuda()
 
-    if args.show_summary:
+    if args.summary:
         torchsummary.summary(model, (3, config.model.input_size, config.model.input_size))
 
     return model
@@ -445,7 +445,7 @@ if __name__ == '__main__':
                         type=str, default='test')
     parser.add_argument('--fold', help='fold number', type=int, default=0)
     parser.add_argument('--predict', help='model to resume training', action='store_true')
-    parser.add_argument('--show_summary', help='show model summary', action='store_true')
+    parser.add_argument('--summary', help='show model summary', action='store_true')
     parser.add_argument('--lr_override', help='override learning rate', type=float, default=0)
     args = parser.parse_args()
 
