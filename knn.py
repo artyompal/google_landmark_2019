@@ -15,11 +15,11 @@ from debug import dprint
 
 K = 20
 RESULTS_DIR = '../predicts'
-GPU= True
+USE_GPU = True
 
 def search_against_fragment(train_features: np.ndarray, test_features: np.ndarray) \
     -> Tuple[np.ndarray, np.ndarray]:
-    if GPU:
+    if USE_GPU:
         # build a flat index (CPU)
         # index_flat = faiss.IndexFlat(d, faiss.METRIC_INNER_PRODUCT)
         index_flat = faiss.IndexFlat(d, faiss.METRIC_INNER_PRODUCT)
@@ -60,14 +60,10 @@ def merge_results(index1: np.ndarray, distances1: np.ndarray, index2: np.ndarray
 
     for sample in range(joint_index.shape[0]):
         closest_indices = np.argsort(joint_distances[sample, :])
-        # print("closest_indices", closest_indices.shape, closest_indices)
-
         best_indices[sample, :] = joint_index[sample, closest_indices][:K]
-        # print("best_indices[sample]", best_indices[sample])
-
         best_distances[sample, :] = joint_distances[sample, closest_indices][:K]
 
-    print("best_index", best_index.shape, "best_distances", best_distances.shape)
+    print("best_indices", best_indices.shape, "best_distances", best_distances.shape)
     dprint(best_indices)
     dprint(best_distances)
     return best_indices, best_distances
@@ -98,17 +94,20 @@ if __name__ == "__main__":
     print("shape", test_features[0].shape, "non-zeros", np.count_nonzero(test_features[0]))
     d = test_features[0].shape[0]
 
-    if GPU:
+    if USE_GPU:
         print("initializing CUDA")
         res = faiss.StandardGpuResources()
 
     best_index, best_distance = None, None
+    offset = 0
     for fragment in tqdm(train_fnames):
         train_features = np.load(fragment)
         train_features = train_features.reshape(train_features.shape[0], -1)
         train_features /= (np.linalg.norm(train_features, axis=1, keepdims=True) + 1e-8)
         print("features shape", train_features.shape)
         idx, dist = search_against_fragment(train_features, test_features)
+        idx += offset
+        offset += train_features.shape[0]
 
         if best_index is None:
             best_index, best_distances = idx, dist
