@@ -306,7 +306,7 @@ def validate(val_loader: Any, model: Any, epoch: int) -> float:
 
     predicts, confs, targets = inference(val_loader, model)
     predicts, confs = predicts[:, 0], confs[:, 0] # FIXME: use config.test.num_predicts?
-    assert targets
+    assert targets is not None
     score = GAP(predicts, confs, targets)
 
     logger.info(f'{epoch} GAP {score:.4f}')
