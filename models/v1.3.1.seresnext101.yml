@@ -25,5 +25,11 @@ scheduler:
         base_lr: 0.0001
         step_size_up: 4000
 
+scheduler2:
+    name: 'reduce_lr_on_plateau'
+    params:
+        factor: 0.2
+        patience: 4
+
 loss:
     name: 'cross_entropy'

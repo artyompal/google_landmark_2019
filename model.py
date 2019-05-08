@@ -203,7 +203,7 @@ def save_checkpoint(state: Dict[str, Any], filename: str, model_dir: str) -> Non
     logger.info(f'A snapshot was saved to {filename}')
 
 def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
-          epoch: int, lr_scheduler: Any) -> None:
+          epoch: int, lr_scheduler: Any, lr_scheduler2: Any) -> None:
     logger.info(f'epoch {epoch}')
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -238,8 +238,17 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
         loss.backward()
         optimizer.step()
 
+        lr_updated = False
+
         if is_scheduler_continuous(config.scheduler.name):
             lr_scheduler.step()
+            lr_updated = True
+
+        if is_scheduler_continuous(config.scheduler2.name):
+            lr_scheduler2.step()
+            lr_updated = True
+
+        if lr_updated:
             lr_str = f'\tlr {get_lr(optimizer):.08f}'
 
         # measure elapsed time
@@ -380,6 +389,7 @@ def run() -> float:
 
     optimizer = get_optimizer(config, model.parameters())
     lr_scheduler = get_scheduler(config, optimizer)
+    lr_scheduler2 = get_scheduler(config, optimizer) if config.scheduler2.name else None
     criterion = get_loss(config)
 
     if args.weights is None:
@@ -415,36 +425,39 @@ def run() -> float:
     best_epoch = 0
 
     last_lr = get_lr(optimizer)
-    best_model_path = None
+    best_model_path = args.weights
 
     for epoch in range(last_epoch + 1, config.train.num_epochs + 1):
         logger.info('-' * 50)
 
-        if not is_scheduler_continuous(config.scheduler.name):
-            # if we have just reduced LR, reload the best saved model
-            lr = get_lr(optimizer)
-            logger.info(f'learning rate {lr}')
-
-            if lr < last_lr - 1e-10 and best_model_path is not None:
-                last_checkpoint = torch.load(os.path.join(model_dir, best_model_path))
-                assert(last_checkpoint['arch']==config.model.arch)
-                model.load_state_dict(last_checkpoint['state_dict'])
-                optimizer.load_state_dict(last_checkpoint['optimizer'])
-                logger.info(f'checkpoint {best_model_path} was loaded.')
-                set_lr(optimizer, lr)
-                last_lr = lr
-
-            if lr < config.train.min_lr * 1.01:
-                logger.info('reached minimum LR, stopping')
-                break
+        # if not is_scheduler_continuous(config.scheduler.name):
+        #     # if we have just reduced LR, reload the best saved model
+        #     lr = get_lr(optimizer)
+        #     logger.info(f'learning rate {lr}')
+        #
+        #     if lr < last_lr - 1e-10 and best_model_path is not None:
+        #         last_checkpoint = torch.load(os.path.join(model_dir, best_model_path))
+        #         assert(last_checkpoint['arch']==config.model.arch)
+        #         model.load_state_dict(last_checkpoint['state_dict'])
+        #         optimizer.load_state_dict(last_checkpoint['optimizer'])
+        #         logger.info(f'checkpoint {best_model_path} was loaded.')
+        #         set_lr(optimizer, lr)
+        #         last_lr = lr
+        #
+        #     if lr < config.train.min_lr * 1.01:
+        #         logger.info('reached minimum LR, stopping')
+        #         break
 
         get_lr(optimizer)
 
-        train(train_loader, model, criterion, optimizer, epoch, lr_scheduler)
+        train(train_loader, model, criterion, optimizer, epoch, lr_scheduler,
+              lr_scheduler2)
         score = validate(val_loader, model, epoch)
 
         if not is_scheduler_continuous(config.scheduler.name):
             lr_scheduler.step(score)
+        if lr_scheduler2 and not is_scheduler_continuous(config.scheduler.name):
+            lr_scheduler2.step(score)
 
         is_best = score > best_score
         best_score = max(score, best_score)

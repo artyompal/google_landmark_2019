@@ -65,8 +65,12 @@ def _get_default_config(filename: str, args: Any) -> edict:
     cfg.optimizer.params = edict()
 
     cfg.scheduler = edict()
-    cfg.scheduler.name = 'none'
+    cfg.scheduler.name = ''
     cfg.scheduler.params = edict()
+
+    cfg.scheduler2 = edict()
+    cfg.scheduler2.name = ''
+    cfg.scheduler2.params = edict()
 
     cfg.loss = edict()
     cfg.loss.name = 'none'

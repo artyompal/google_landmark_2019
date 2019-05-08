@@ -20,7 +20,7 @@ def none(optimizer, last_epoch, **_):
     return lr_scheduler.StepLR(optimizer, step_size=10000000, last_epoch=last_epoch)
 
 def reduce_lr_on_plateau(optimizer, last_epoch, mode='max', factor=0.1,
-                         patience=10, threshold=0.001, threshold_mode='rel',
+                         patience=10, threshold=0.0001, threshold_mode='rel',
                          cooldown=0, min_lr=0, **_):
     return lr_scheduler.ReduceLROnPlateau(optimizer, mode=mode, factor=factor,
                                           patience=patience, threshold=threshold,
