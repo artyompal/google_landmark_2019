@@ -18,7 +18,7 @@ def _get_default_config(filename: str, args: Any) -> edict:
     cfg.num_workers = min(12, multiprocessing.cpu_count())
 
     cfg.data = edict()
-    cfg.data.data_dir = '../data/'
+    cfg.data.data_dir = '../data/splits/'
     cfg.data.train_dir = '../data/train/'
     cfg.data.test_dir = '../data/test/'
     cfg.data.train_filename = None

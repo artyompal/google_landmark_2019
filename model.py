@@ -23,6 +23,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
+import torch.multiprocessing
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchsummary
@@ -134,7 +135,7 @@ def load_data(fold: int) -> Any:
                                     image_size=config.model.image_size,
                                     num_classes=config.model.num_classes)
     else:
-        train_df = pd.read_csv(os.path.join(config.data.data_dir, 'train.csv'))
+        train_df = pd.read_csv('../data/train.csv')
         train_df.drop(columns=['url', 'landmark_id'], inplace=True)
 
         test_dataset = ImageDataset(train_df, path=config.data.train_dir, mode='test',
@@ -270,16 +271,16 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, torch.Tensor,
                 input_, target = data, None
 
             if config.test.num_ttas != 1 and data_loader.dataset.mode == 'test':
-                bs, ncrops, c, h, w = input_.size()
-                input_ = input_.view(-1, c, h, w) # fuse batch size and ncrops
+                bs, num_ttas, c, h, w = input_.size()
+                input_ = input_.view(-1, c, h, w)
 
                 output = model(input_.cuda())
                 output = activation(output)
 
                 if config.test.tta_combine_func == 'max':
-                    output = output.view(bs, ncrops, -1).max(1)[0]
+                    output = output.view(bs, num_ttas, -1).max(dim=1)[0]
                 elif config.test.tta_combine_func == 'mean':
-                    output = output.view(bs, ncrops, -1).mean(1)
+                    output = output.view(bs, num_ttas, -1).mean(dim=1)
                 else:
                     assert False
             else:
@@ -305,6 +306,7 @@ def validate(val_loader: Any, model: Any, epoch: int) -> float:
 
     predicts, confs, targets = inference(val_loader, model)
     predicts, confs = predicts[:, 0], confs[:, 0] # FIXME: use config.test.num_predicts?
+    assert targets
     score = GAP(predicts, confs, targets)
 
     logger.info(f'{epoch} GAP {score:.4f}')
@@ -324,11 +326,11 @@ def generate_features(test_loader: Any, model: Any, model_path: Any) -> None:
             input_, target = data, None
 
             if config.test.num_ttas != 1 and test_loader.dataset.mode == 'test':
-                bs, ncrops, c, h, w = input_.size()
-                input_ = input_.view(-1, c, h, w) # fuse batch size and ncrops
+                bs, num_ttas, c, h, w = input_.size()
+                input_ = input_.view(-1, c, h, w)
 
                 features = model.module.features(input_.cuda())
-                features = features.view(bs, ncrops, -1).mean(1)
+                features = features.view(bs, num_ttas, -1).mean(dim=1)
             else:
                 features = model.module.features(input_.cuda())
 
@@ -346,8 +348,8 @@ def generate_submission(val_loader: Any, test_loader: Any, model: Any,
                         label_encoder: Any, epoch: int, model_path: Any) -> np.ndarray:
     sample_sub = pd.read_csv('../data/recognition_sample_submission.csv')
 
-    predicts, confs, _ = inference(test_loader, model)
-    predicts, confs = predicts.cpu().numpy(), confs.cpu().numpy()
+    predicts_gpu, confs_gpu, _ = inference(test_loader, model)
+    predicts, confs = predicts_gpu.cpu().numpy(), confs_gpu.cpu().numpy()
 
     labels = [label_encoder.inverse_transform(pred) for pred in predicts]
     print('labels')
@@ -398,13 +400,13 @@ def run() -> float:
         elif 'lr' in config.scheduler.params:
             set_lr(optimizer, config.scheduler.params.lr)
 
-    if args.predict:
+    if args.gen_predict:
         print('inference mode')
         generate_submission(val_loader, test_loader, model, label_encoder,
                             last_epoch, args.weights)
         sys.exit(0)
 
-    if args.calc_features:
+    if args.gen_features:
         print('inference mode')
         generate_features(test_loader, model, args.weights)
         sys.exit(0)
@@ -474,8 +476,8 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', help='dataset for prediction, train/test',
                         type=str, default='test')
     parser.add_argument('--fold', help='fold number', type=int, default=0)
-    parser.add_argument('--predict', help='make predictions for the testset and return', action='store_true')
-    parser.add_argument('--calc_features', help='calculate features for the given set', action='store_true')
+    parser.add_argument('--gen_predict', help='make predictions for the testset and return', action='store_true')
+    parser.add_argument('--gen_features', help='calculate features for the given set', action='store_true')
     parser.add_argument('--summary', help='show model summary', action='store_true')
     parser.add_argument('--lr_override', help='override learning rate', type=float, default=0)
     args = parser.parse_args()
@@ -485,7 +487,7 @@ if __name__ == '__main__':
     if not os.path.exists(config.experiment_dir):
         os.makedirs(config.experiment_dir)
 
-    log_filename = 'log_training.txt' if not args.predict and \
-                   not args.calc_features else 'log_predict.txt'
+    log_filename = 'log_training.txt' if not args.gen_predict and \
+                   not args.gen_features else 'log_predict.txt'
     logger = create_logger(os.path.join(config.experiment_dir, log_filename))
     run()
