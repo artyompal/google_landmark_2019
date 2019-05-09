@@ -22,6 +22,7 @@ USE_GPU = True
 USE_COSINE_DIST = False
 DIMS = 2048
 
+
 def search_against_fragment(train_features: np.ndarray, test_features: np.ndarray) \
     -> Tuple[np.ndarray, np.ndarray]:
     if USE_GPU:
@@ -37,7 +38,7 @@ def search_against_fragment(train_features: np.ndarray, test_features: np.ndarra
         index_flat = faiss.IndexFlatIP(DIMS)
 
     index_flat.add(train_features)
-    print("total size of index:", index_flat.ntotal)
+    print("total size of the database:", index_flat.ntotal)
 
     # print("sanity search...")
     # distances, index = index_flat.search(train_features[:10], K)  # actual search
@@ -58,85 +59,24 @@ def merge_results(index1: np.ndarray, distances1: np.ndarray, index2: np.ndarray
     assert index1.shape == distances1.shape and index2.shape == distances2.shape
     assert index1.shape[1] == index2.shape[1]
 
-    joint_index = np.hstack((index1, index2))
+    joint_indices = np.hstack((index1, index2))
     joint_distances = np.hstack((distances1, distances2))
-    print("joint_index", joint_index.shape, "joint_distances", joint_distances.shape)
-    assert joint_index.shape == joint_distances.shape
+    print("joint_indices", joint_indices.shape, "joint_distances", joint_distances.shape)
+    assert joint_indices.shape == joint_distances.shape
 
     best_indices = np.zeros((index1.shape[0], K), dtype=object)
     best_distances = np.zeros((index1.shape[0], K), dtype=np.float32)
 
-    for sample in range(joint_index.shape[0]):
+    for sample in range(joint_indices.shape[0]):
         closest_indices = np.argsort(joint_distances[sample])[:K]
-        best_indices[sample] = joint_index[sample, closest_indices]
+
+        best_indices[sample] = joint_indices[sample, closest_indices]
         best_distances[sample] = joint_distances[sample, closest_indices]
 
     print("best_indices", best_indices.shape, "best_distances", best_distances.shape)
     dprint(best_indices)
     dprint(best_distances)
-    dprint(describe(best_distances))
     return best_indices, best_distances
-
-'''
-if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print(f'usage: {sys.argv[0]} test_features.npy train_features_1.npy ...')
-        sys.exit()
-
-    test_fname = sys.argv[1]
-    train_fnames = sys.argv[2:]
-
-    if not os.path.exists(KNN_PREDICTS_DIR):
-        os.makedirs(KNN_PREDICTS_DIR)
-
-    model_name = os.path.splitext(os.path.basename(test_fname))[0]
-    model_name = model_name[5:] if model_name.startswith('test_') else model_name
-    model_name = model_name[:-7] if model_name.endswith('_part00') else model_name
-    result_fname = os.path.join(KNN_PREDICTS_DIR, f'dist_{model_name}.npz')
-    print("will save results to", result_fname)
-
-    test_features = np.squeeze(np.load(test_fname))
-    if USE_COSINE_DIST:
-        test_features /= (np.linalg.norm(test_features, axis=1, keepdims=True) + 1e-8)
-
-    print(test_features.shape)
-    print(test_features)
-    print("first vector:")
-    print("shape", test_features[0].shape, "non-zeros", np.count_nonzero(test_features[0]))
-
-    if USE_GPU:
-        print("initializing CUDA")
-        res = faiss.StandardGpuResources()
-
-    best_index, best_distance = None, None
-    offset = 0
-    for fragment in tqdm(train_fnames):
-        train_features = np.load(fragment)
-        train_features = train_features.reshape(train_features.shape[0], -1)
-
-        if USE_COSINE_DIST:
-            train_features /= (np.linalg.norm(train_features, axis=1, keepdims=True) + 1e-8)
-
-        print("features shape", train_features.shape)
-        idx, dist = search_against_fragment(train_features, test_features)
-        idx += offset
-        offset += train_features.shape[0]
-
-        if best_index is None:
-            best_index, best_distances = idx, dist
-        else:
-            best_index, best_distances = merge_results(best_index, best_distances, idx, dist)
-
-    print('best_index')
-    print(best_index.shape)
-    print(best_index)
-    print('best_distances')
-    print(best_distances.shape)
-    print(best_distances)
-
-    print("writing results to", result_fname)
-    np.savez(result_fname, indices=best_index, distances=best_distances)
-'''
 
 def load_features(filename: str) -> np.ndarray:
     features = np.load(filename)
@@ -147,6 +87,39 @@ def load_features(filename: str) -> np.ndarray:
 
     return features
 
+
+class DatasetIter:
+    ''' Iterator which remembers previous position. '''
+    def __init__(self, dataset_parts: 'DatasetParts') -> None:
+        self.files = dataset_parts.files
+        self.train_files = iter(dataset_parts.files)
+        self.subset_mask = dataset_parts.subset_mask
+        self.val_offset = 0
+
+    def __next__(self) -> np.ndarray:
+        features = load_features(next(self.train_files))
+        fragment_size = features.shape[0]
+        part_mask = self.subset_mask[self.val_offset : self.val_offset + fragment_size]
+
+        features = features[part_mask]
+        self.val_offset += fragment_size
+        return features
+
+class DatasetParts(Iterable[DatasetIter]):
+    ''' A collection that reads features by parts. '''
+    def __init__(self, train_df: pd.DataFrame, subset_mask: pd.Series,
+                 files: List[str]) -> None:
+        self.train_df = train_df
+        self.subset_mask = subset_mask
+        self.files = files
+
+    def __iter__(self) -> DatasetIter: # type: ignore
+        return DatasetIter(self)
+
+    def __len__(self) -> int:
+        return len(self.files)
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         print(f'usage: {sys.argv[0]} test_features.npy train_features_1.npy ...')
@@ -161,7 +134,8 @@ if __name__ == "__main__":
     model_name = os.path.splitext(os.path.basename(test_fname))[0]
     model_name = model_name[5:] if model_name.startswith('test_') else model_name
     model_name = model_name[:-7] if model_name.endswith('_part00') else model_name
-    result_fname = os.path.join(KNN_PREDICTS_DIR, f'dist_{model_name}.npz')
+    type = 'cosine' if USE_COSINE_DIST else 'euclidean'
+    result_fname = os.path.join(KNN_PREDICTS_DIR, f'dist_{model_name}_{type}.npz')
     print("will save results to", result_fname)
 
 
@@ -189,66 +163,57 @@ if __name__ == "__main__":
         os.makedirs(KNN_PREDICTS_DIR)
 
     full_train_df = pd.read_csv('../data/train.csv')
-    # level1_val = pd.read_csv('../data/splits/50_samples_18425_classes_fold_0_val.csv')
-    # val_df = full_train_df.loc[~train_df.id.isin(train_df.id)]
 
-    level2_train = pd.read_csv('../data/splits/under_50_samples_fold_0_train.csv')
-    level2_val = pd.read_csv('../data/splits/under_50_samples_fold_0_val.csv')
-
-    # level2_full_df = full_train_df.loc[~full_train_df.id.isin(level1_val)]
-    # dprint(level2_full_df.shape)
-    # train_df, val_df  = train_test_split(level2_full_df, shuffle=True, random_state=0)
-
-    # train_df = full_train_df.loc[full_train_df.id.isin(level2_train.id)]
-    # val_df = full_train_df.loc[full_train_df.id.isin(level2_val.id)]
-
-    dprint(level2_train.shape)
-    dprint(level2_val.shape)
-
-    train_bitmask = full_train_df.id.isin(level2_train.id)
-    val_bitmask = full_train_df.id.isin(level2_val.id)
-    dprint(sum(train_bitmask))
-    dprint(sum(val_bitmask))
+    train_df = pd.read_csv('../data/splits/50_samples_18425_classes_fold_0_train.csv')
+    train_mask = ~full_train_df.id.isin(train_df.id)
+    dprint(train_mask.shape)
+    dprint(sum(train_mask))
 
 
     # 2. for every sample from validation set, find K nearest samples from the train set
 
-    # if USE_GPU:
-    #     print("initializing CUDA")
-    #     res = faiss.StandardGpuResources()
+    if USE_GPU:
+        print("initializing CUDA")
+        res = faiss.StandardGpuResources()
 
-    val_offset = 0
-    total_val_samples = 0
+    dataset_parts = DatasetParts(full_train_df, train_mask, train_fnames)
+    total_best_indices, total_best_distances = None, None
 
-    for val_frag_idx, val_fragment in enumerate(train_fnames):
-        val_features = load_features(val_fragment)
-        fragment_size = val_features.shape[0]
-        mask = val_bitmask[val_offset : val_offset + fragment_size]
-        dprint(val_features.shape)
-        dprint(sum(mask))
+    for i, test_features in enumerate(dataset_parts):
+        print('=' * 100)
+        print('iteration', i)
+        best_indices, best_distance = None, None
 
-        val_features = val_features[mask]
-        # dprint(val_features.shape)
+        for train_features in dataset_parts:
+            print('-' * 100)
+            idx, dist = search_against_fragment(train_features, test_features)
+            dprint(idx.shape)
+            dprint(dist.shape)
 
-        total_val_samples += val_features.shape[0]
-        val_offset += fragment_size
+            if best_indices is None:
+                best_indices, best_distances = idx, dist
+            else:
+                best_indices, best_distances = merge_results(best_indices, best_distances, idx, dist)
 
-        # best_index, best_distance = None, None
-        # train_offset = 0
-        #
-        # for train_fragment in tqdm(train_fnames):
-        #     train_features = load_features(train_fragment)
-        #
-        #     idx, dist = search_against_fragment(train_features, val_features)
-        #     idx += train_offset
-        #     train_offset += train_features.shape[0]
-        #
-        #     if best_index is None:
-        #         best_index, best_distances = idx, dist
-        #     else:
-        #         best_index, best_distances = merge_results(best_index, best_distances, id)
+        best_indices = np.delete(best_indices, 0, axis=1)
+        best_distance = np.delete(best_distance, 0, axis=1)
 
-    dprint(total_val_samples)
+        dprint(best_indices.shape)
+        dprint(best_indices)
+        dprint(best_distances.shape)
+        dprint(best_distances)
+
+        if total_best_indices is None:
+            total_best_indices, total_best_distances = best_indices, best_distances
+        else:
+            total_best_indices = np.vstack((total_best_indices, best_indices))
+            total_best_distances = np.vstack((total_best_distances, best_distances))
+
+    print("writing results to", result_fname)
+    dprint(total_best_indices)
+    dprint(total_best_distances)
+    np.savez(result_fname, indices=total_best_indices, distances=total_best_distances)
+
 
     # 3. make a prediction about classes
 
