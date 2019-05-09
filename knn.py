@@ -182,7 +182,7 @@ if __name__ == "__main__":
     for i, test_features in enumerate(dataset_parts):
         print('=' * 100)
         print('iteration', i)
-        best_indices, best_distance = None, None
+        best_indices, best_distances = None, None
 
         for train_features in dataset_parts:
             print('-' * 100)
@@ -196,7 +196,7 @@ if __name__ == "__main__":
                 best_indices, best_distances = merge_results(best_indices, best_distances, idx, dist)
 
         best_indices = np.delete(best_indices, 0, axis=1)
-        best_distance = np.delete(best_distance, 0, axis=1)
+        best_distances = np.delete(best_distances, 0, axis=1)
 
         dprint(best_indices.shape)
         dprint(best_indices)
