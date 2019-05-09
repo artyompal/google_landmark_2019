@@ -188,30 +188,31 @@ if __name__ == "__main__":
     if not os.path.exists(KNN_PREDICTS_DIR):
         os.makedirs(KNN_PREDICTS_DIR)
 
-    level1_val = pd.read_csv('../data/splits/50_samples_18425_classes_fold_0_val.csv')
-    orig_train_df = pd.read_csv('../data/train.csv')
-    dprint(orig_train_df.shape)
+    full_train_df = pd.read_csv('../data/train.csv')
+    # level1_val = pd.read_csv('../data/splits/50_samples_18425_classes_fold_0_val.csv')
+    # val_df = full_train_df.loc[~train_df.id.isin(train_df.id)]
 
-    # reminder_train = pd.read_csv('../data/splits/50_samples_fold_0_train.csv')
-    # reminder_val = pd.read_csv('../data/splits/50_samples_fold_0_train.csv')
-    # level2_full_df = pd.concat([level1_val, reminder_train, reminder_val])
+    level2_train = pd.read_csv('../data/splits/under_50_samples_fold_0_train.csv')
+    level2_val = pd.read_csv('../data/splits/under_50_samples_fold_0_val.csv')
 
-    level2_full_df = orig_train_df.loc[~orig_train_df.id.isin(level1_val)]
-    train_df, val_df  = train_test_split(level2_full_df, shuffle=True, random_state=0)
+    # level2_full_df = full_train_df.loc[~full_train_df.id.isin(level1_val)]
+    # dprint(level2_full_df.shape)
+    # train_df, val_df  = train_test_split(level2_full_df, shuffle=True, random_state=0)
 
-    dprint(level2_full_df.shape)
-    dprint(train_df.shape)
-    dprint(val_df.shape)
+    # train_df = full_train_df.loc[full_train_df.id.isin(level2_train.id)]
+    # val_df = full_train_df.loc[full_train_df.id.isin(level2_val.id)]
 
-    train_bitmask = orig_train_df.id.isin(train_df.id)
-    val_bitmask = orig_train_df.id.isin(val_df.id)
+    dprint(level2_train.shape)
+    dprint(level2_val.shape)
+
+    train_bitmask = full_train_df.id.isin(level2_train.id)
+    val_bitmask = full_train_df.id.isin(level2_val.id)
     dprint(sum(train_bitmask))
-    dprint(sum(train_bitmask.shape))
     dprint(sum(val_bitmask))
-    dprint(sum(val_bitmask.shape))
 
 
     # 2. for every sample from validation set, find K nearest samples from the train set
+
     # if USE_GPU:
     #     print("initializing CUDA")
     #     res = faiss.StandardGpuResources()
@@ -219,7 +220,7 @@ if __name__ == "__main__":
     val_offset = 0
     total_val_samples = 0
 
-    for val_fragment in tqdm(train_fnames):
+    for val_frag_idx, val_fragment in enumerate(train_fnames):
         val_features = load_features(val_fragment)
         fragment_size = val_features.shape[0]
         mask = val_bitmask[val_offset : val_offset + fragment_size]
@@ -227,9 +228,10 @@ if __name__ == "__main__":
         dprint(sum(mask))
 
         val_features = val_features[mask]
-        dprint(val_features.shape)
+        # dprint(val_features.shape)
 
         total_val_samples += val_features.shape[0]
+        val_offset += fragment_size
 
         # best_index, best_distance = None, None
         # train_offset = 0
@@ -245,8 +247,6 @@ if __name__ == "__main__":
         #         best_index, best_distances = idx, dist
         #     else:
         #         best_index, best_distances = merge_results(best_index, best_distances, id)
-
-        val_offset += fragment_size
 
     dprint(total_val_samples)
 
