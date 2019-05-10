@@ -91,22 +91,24 @@ if __name__ == "__main__":
         df = knn_train_df
 
     # make a prediction about classes
-    predicts = []
+    predicts = np.zeros(len(df))
+    confs = np.zeros(len(df))
+
     for i, (_, id, landmark_id) in enumerate(tqdm(df.itertuples(),
                                                   total=df.shape[0])):
         closest_id = indices[i, 0]
-        predict = knn_train_df.iloc[closest_id, 1]
-        predicts.append(predict)
+        predicts[i] = knn_train_df.iloc[closest_id, 1]
+        confs[i] = distances[i, 0]
 
     if not predict_test:
         # calculate the metric
         predicts = np.array(predicts)
-        gap = GAP(predicts, np.ones_like(predicts), knn_train_df.landmark_id)
+        gap = GAP(predicts, confs, knn_train_df.landmark_id)
         dprint(gap)
     else:
         # generate submission
         sub = df
-        sub['landmarks'] = [f'{lm} 1' for lm in predicts]
+        sub['landmarks'] = [f'{lm} {conf}' for lm, conf in zip(predicts, confs)]
 
         sample_sub = pd.read_csv('../data/recognition_sample_submission.csv')
         sample_sub = sample_sub.set_index('id')

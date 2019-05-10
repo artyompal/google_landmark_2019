@@ -19,7 +19,7 @@ from debug import dprint
 K = 20
 KNN_PREDICTS_DIR = '../predicts'
 USE_GPU = True
-USE_COSINE_DIST = False
+USE_COSINE_DIST = True
 DIMS = 2048
 
 
@@ -64,12 +64,16 @@ def merge_results(index1: np.ndarray, distances1: np.ndarray, index2: np.ndarray
     print("joint_indices", joint_indices.shape, "joint_distances", joint_distances.shape)
     assert joint_indices.shape == joint_distances.shape
 
-    best_indices = np.zeros((index1.shape[0], K), dtype=object)
+    best_indices = np.zeros((index1.shape[0], K), dtype=int)
     best_distances = np.zeros((index1.shape[0], K), dtype=np.float32)
 
     for sample in range(joint_indices.shape[0]):
-        closest_indices = np.argsort(joint_distances[sample])[:K]
+        if not USE_COSINE_DIST:
+            closest_indices = np.argsort(joint_distances[sample])
+        else:
+            closest_indices = np.argsort(-joint_distances[sample])
 
+        closest_indices = closest_indices[:K]
         best_indices[sample] = joint_indices[sample, closest_indices]
         best_distances[sample] = joint_distances[sample, closest_indices]
 
@@ -185,7 +189,7 @@ if __name__ == "__main__":
                             if predict_test else train_dataset_parts
     total_best_indices, total_best_distances = None, None
 
-    for i, val_features in enumerate(test_dataset_parts):
+    for i, val_features in enumerate(tqdm(test_dataset_parts, disable=predict_test)):
         print('=' * 100)
         print('iteration', i)
 
