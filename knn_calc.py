@@ -213,16 +213,3 @@ if __name__ == "__main__":
     dprint(total_best_indices)
     dprint(total_best_distances)
     np.savez(result_fname, indices=total_best_indices, distances=total_best_distances)
-
-
-    # 3. make a prediction about classes
-
-    # 4. calculate the metric
-
-    # 5. take full train set
-
-    # 6. for every sample from the test set, find K nearest samples from the full train set
-
-    # 7. make a prediction
-
-    # 8. generate submission
