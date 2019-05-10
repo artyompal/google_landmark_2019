@@ -182,11 +182,14 @@ if __name__ == "__main__":
     for i, test_features in enumerate(dataset_parts):
         print('=' * 100)
         print('iteration', i)
+
         best_indices, best_distances = None, None
+        base_index = 0
 
         for train_features in dataset_parts:
             print('-' * 100)
             idx, dist = search_against_fragment(train_features, test_features)
+            idx += base_index
             dprint(idx.shape)
             dprint(dist.shape)
 
@@ -194,6 +197,8 @@ if __name__ == "__main__":
                 best_indices, best_distances = idx, dist
             else:
                 best_indices, best_distances = merge_results(best_indices, best_distances, idx, dist)
+
+            base_index += train_features.shape[0]
 
         best_indices = np.delete(best_indices, 0, axis=1)
         best_distances = np.delete(best_distances, 0, axis=1)
