@@ -67,33 +67,51 @@ if __name__ == "__main__":
 
     predict_test = sys.argv[1] == '--test'
 
-    # 1. for every sample from validation set, find K nearest samples from the train set
+    # load distances info
     dist_file = np.load(sys.argv[2], allow_pickle=True)
     distances, indices = dist_file['distances'], dist_file['indices']
     dprint(distances.shape)
     dprint(indices.shape)
     dprint(np.max(indices.flatten()))
 
-    # 2. define level-2 train and validation sets
+    # load dataframe
     full_train_df = pd.read_csv('../data/train.csv')
     full_train_df.drop(columns='url', inplace=True)
     train_df = pd.read_csv('../data/splits/50_samples_18425_classes_fold_0_train.csv')
     train_mask = ~full_train_df.id.isin(train_df.id)
     knn_train_df = full_train_df.loc[train_mask]
-    # knn_train_df = knn_train_df.iloc[:282363]
     dprint(knn_train_df.shape)
 
-    # 3. make a prediction about classes
+    if predict_test:
+        df = pd.read_csv('../data/test.csv')
+        df = df.loc[df.id.apply(lambda img: os.path.exists(os.path.join(
+            f'../data/test/{img}.jpg')))]
+        print('test df after filtering', df.shape)
+    else:
+        df = knn_train_df
+
+    # make a prediction about classes
     predicts = []
-    for i, (_, id, landmark_id) in enumerate(tqdm(knn_train_df.itertuples(),
-                                                  total=knn_train_df.shape[0])):
+    for i, (_, id, landmark_id) in enumerate(tqdm(df.itertuples(),
+                                                  total=df.shape[0])):
         closest_id = indices[i, 0]
         predict = knn_train_df.iloc[closest_id, 1]
         predicts.append(predict)
 
-    # 4. calculate the metric
-    predicts = np.array(predicts)
-    gap = GAP(predicts, np.ones_like(predicts), knn_train_df.landmark_id)
-    dprint(gap)
+    if not predict_test:
+        # calculate the metric
+        predicts = np.array(predicts)
+        gap = GAP(predicts, np.ones_like(predicts), knn_train_df.landmark_id)
+        dprint(gap)
+    else:
+        # generate submission
+        sub = df
+        sub['landmarks'] = [f'{lm} 1' for lm in predicts]
 
-    # 8. generate submission
+        sample_sub = pd.read_csv('../data/recognition_sample_submission.csv')
+        sample_sub = sample_sub.set_index('id')
+        sub = sub.set_index('id')
+        sample_sub.update(sub)
+
+        name = os.path.splitext(os.path.basename(sys.argv[2]))[0]
+        sample_sub.to_csv(f'{name}.csv')

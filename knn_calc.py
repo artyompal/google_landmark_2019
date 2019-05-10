@@ -88,7 +88,7 @@ def load_features(filename: str) -> np.ndarray:
     return features
 
 
-class DatasetIter:
+class DatasetIter(Iterator[np.ndarray]):
     ''' Iterator which remembers previous position. '''
     def __init__(self, dataset_parts: 'DatasetParts') -> None:
         self.files = dataset_parts.files
@@ -115,7 +115,7 @@ class DatasetParts(Iterable[DatasetIter]):
         self.files = files
         self.subset_mask = subset_mask
 
-    def __iter__(self) -> DatasetIter: # type: ignore
+    def __iter__(self) -> DatasetIter:
         return DatasetIter(self)
 
     def __len__(self) -> int:
