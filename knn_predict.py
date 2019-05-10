@@ -50,8 +50,8 @@ def GAP(predicts: np.ndarray, confs: np.ndarray, targets: np.ndarray) -> float:
     return res
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print(f'usage: {sys.argv[0]} <distances.npz>')
+    if len(sys.argv) != 3 or sys.argv[1] not in ['--val', '--test']:
+        print(f'usage: {sys.argv[0]} --val|--test <distances.npz>')
         sys.exit()
 
     ''' Algorithm:
@@ -65,8 +65,10 @@ if __name__ == "__main__":
     8. generate submission
     '''
 
+    predict_test = sys.argv[1] == '--test'
+
     # 1. for every sample from validation set, find K nearest samples from the train set
-    dist_file = np.load(sys.argv[1], allow_pickle=True)
+    dist_file = np.load(sys.argv[2], allow_pickle=True)
     distances, indices = dist_file['distances'], dist_file['indices']
     dprint(distances.shape)
     dprint(indices.shape)
@@ -93,11 +95,5 @@ if __name__ == "__main__":
     predicts = np.array(predicts)
     gap = GAP(predicts, np.ones_like(predicts), knn_train_df.landmark_id)
     dprint(gap)
-
-    # 5. take full train set
-
-    # 6. for every sample from the test set, find K nearest samples from the full train set
-
-    # 7. make a prediction
 
     # 8. generate submission

@@ -94,24 +94,26 @@ class DatasetIter:
         self.files = dataset_parts.files
         self.train_files = iter(dataset_parts.files)
         self.subset_mask = dataset_parts.subset_mask
-        self.val_offset = 0
+        self.base_offset = 0
 
     def __next__(self) -> np.ndarray:
         features = load_features(next(self.train_files))
         fragment_size = features.shape[0]
-        part_mask = self.subset_mask[self.val_offset : self.val_offset + fragment_size]
 
-        features = features[part_mask]
-        self.val_offset += fragment_size
+        if self.subset_mask is not None:
+            part_mask = self.subset_mask[self.base_offset : self.base_offset + fragment_size]
+            features = features[part_mask]
+
+        self.base_offset += fragment_size
         return features
 
 class DatasetParts(Iterable[DatasetIter]):
     ''' A collection that reads features by parts. '''
-    def __init__(self, train_df: pd.DataFrame, subset_mask: pd.Series,
+    def __init__(self, df: pd.DataFrame, subset_mask: Optional[pd.Series],
                  files: List[str]) -> None:
-        self.train_df = train_df
-        self.subset_mask = subset_mask
+        self.df = df
         self.files = files
+        self.subset_mask = subset_mask
 
     def __iter__(self) -> DatasetIter: # type: ignore
         return DatasetIter(self)
@@ -121,21 +123,27 @@ class DatasetParts(Iterable[DatasetIter]):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print(f'usage: {sys.argv[0]} test_features.npy train_features_1.npy ...')
+    if len(sys.argv) < 4 or sys.argv[1] not in ['--train', '--test']:
+        print(f'usage: {sys.argv[0]} --train train_features_1.npy ...')
+        print(f'or {sys.argv[0]} --test test_features.npy train_features_1.npy ...')
         sys.exit()
 
-    test_fname = sys.argv[1]
-    train_fnames = sys.argv[2:]
+    predict_test = sys.argv[1] == '--test'
+    test_fname = sys.argv[2] if predict_test else ''
+    train_fnames = sys.argv[3:] if predict_test else sys.argv[2:]
 
     if not os.path.exists(KNN_PREDICTS_DIR):
         os.makedirs(KNN_PREDICTS_DIR)
 
-    model_name = os.path.splitext(os.path.basename(test_fname))[0]
-    model_name = model_name[5:] if model_name.startswith('test_') else model_name
-    model_name = model_name[:-7] if model_name.endswith('_part00') else model_name
+    model_name = os.path.splitext(os.path.basename(train_fnames[0]))[0]
+    assert model_name.startswith('train_')
+    assert model_name.endswith('_part00')
+    model_name = model_name[6:-7]
+
+    dataset = 'test' if predict_test else 'train'
     type = 'cosine' if USE_COSINE_DIST else 'euclidean'
-    result_fname = os.path.join(KNN_PREDICTS_DIR, f'dist_{model_name}_{type}.npz')
+    result_fname = os.path.join(KNN_PREDICTS_DIR,
+                                f'dist_{model_name}_{dataset}_{type}.npz')
     print("will save results to", result_fname)
 
 
@@ -152,13 +160,6 @@ if __name__ == "__main__":
 
     # 1. define level-2 train and validation sets
 
-    if len(sys.argv) < 3:
-        print(f'usage: {sys.argv[0]} test_features.npy train_features_1.npy ...')
-        sys.exit()
-
-    test_fname = sys.argv[1]
-    train_fnames = sys.argv[2:]
-
     if not os.path.exists(KNN_PREDICTS_DIR):
         os.makedirs(KNN_PREDICTS_DIR)
 
@@ -169,6 +170,9 @@ if __name__ == "__main__":
     dprint(train_mask.shape)
     dprint(sum(train_mask))
 
+    if predict_test:
+        test_df = pd.read_csv('../data/test.csv')
+
 
     # 2. for every sample from validation set, find K nearest samples from the train set
 
@@ -176,19 +180,21 @@ if __name__ == "__main__":
         print("initializing CUDA")
         res = faiss.StandardGpuResources()
 
-    dataset_parts = DatasetParts(full_train_df, train_mask, train_fnames)
+    train_dataset_parts = DatasetParts(full_train_df, train_mask, train_fnames)
+    test_dataset_parts = DatasetParts(test_df, None, [test_fname]) \
+                            if predict_test else train_dataset_parts
     total_best_indices, total_best_distances = None, None
 
-    for i, test_features in enumerate(dataset_parts):
+    for i, val_features in enumerate(test_dataset_parts):
         print('=' * 100)
         print('iteration', i)
 
         best_indices, best_distances = None, None
         base_index = 0
 
-        for train_features in dataset_parts:
+        for train_features in tqdm(train_dataset_parts, disable=not predict_test):
             print('-' * 100)
-            idx, dist = search_against_fragment(train_features, test_features)
+            idx, dist = search_against_fragment(train_features, val_features)
             idx += base_index
             dprint(idx.shape)
             dprint(dist.shape)
