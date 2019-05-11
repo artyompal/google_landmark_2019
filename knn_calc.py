@@ -5,7 +5,7 @@ import os
 import sys
 
 from glob import glob
-from typing import *
+from typing import Iterator, Iterable, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd

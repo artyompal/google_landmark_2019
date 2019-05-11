@@ -5,7 +5,7 @@ import os
 import sys
 
 from glob import glob
-from typing import *
+from typing import Set
 
 import numpy as np
 import pandas as pd
@@ -92,21 +92,40 @@ if __name__ == "__main__":
 
     # make a prediction about classes
     num_predicts = indices.shape[1]
-    predicts = np.zeros((len(df), num_predicts))
+    predicts = np.zeros((len(df), num_predicts), dtype=int)
     confs = np.zeros((len(df), num_predicts))
 
-    for j in range(num_predicts):
-        predicts[:, j] = knn_train_df.iloc[indices[:, j], 1]
-        confs[:, j] = distances[:, j]
+    print('copying predictions')
+    for i in range(num_predicts):
+        predicts[:, i] = knn_train_df.iloc[indices[:, i], 1]
+        confs[:, i] = distances[:, i]
+
+    print('removing duplicates')
+    for i in tqdm(range(confs.shape[0])):
+        seen: Set[int] = set()
+        filtered_pred, filtered_confs = [], []
+
+        for j, (p, c) in enumerate(zip(predicts[i], confs[i])):
+            if p not in seen:
+                seen.add(p)
+                filtered_pred.append(p)
+                filtered_confs.append(c)
+
+        predicts[i, :len(filtered_pred)] = filtered_pred
+        predicts[i, len(filtered_pred):] = -1
+
+        confs[i, :len(filtered_confs)] = filtered_confs
+        confs[i, len(filtered_confs):] = 0
 
     if not predict_test:
-        # calculate the metric
+        print('calculating GAP')
         gap = GAP(predicts, confs, knn_train_df.landmark_id.values)
         dprint(gap)
     else:
-        # generate submission
+        print('generating submission')
         sub = df
-        sub['landmarks'] = [f'{lm} {conf}' for lm, conf in zip(predicts, confs)]
+        combine = lambda t: " ".join(f'{lm} {conf}' for lm, conf in zip(t[0], t[1]) if conf)
+        sub['landmarks'] = list(map(combine, zip(predicts, confs)))
 
         sample_sub = pd.read_csv('../data/recognition_sample_submission.csv')
         sample_sub = sample_sub.set_index('id')
