@@ -5,7 +5,8 @@ import os
 import sys
 
 from glob import glob
-from typing import Set
+from typing import DefaultDict, List, Set
+from collections import defaultdict
 
 import numpy as np
 import pandas as pd
@@ -116,6 +117,20 @@ if __name__ == "__main__":
 
         confs[i, :len(filtered_confs)] = filtered_confs
         confs[i, len(filtered_confs):] = 0
+
+    # print('grouping predicts by class')
+    # for i in tqdm(range(confs.shape[0])):
+    #     preds: DefaultDict[int, List[float]] = defaultdict(list)
+    #
+    #     for pred, conf in zip(predicts[i], confs[i]):
+    #         preds[pred].append(conf)
+    #
+    #     for j, (pred, conf) in enumerate(preds.items()):
+    #         predicts[i, j] = pred
+    #         confs[i, j] = np.mean(conf)
+    #
+    #     predicts[i, len(preds):] = -1
+    #     confs[i, len(preds):] = 0
 
     if not predict_test:
         print('calculating GAP')
