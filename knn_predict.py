@@ -91,14 +91,13 @@ if __name__ == "__main__":
         df = knn_train_df
 
     # make a prediction about classes
-    predicts = np.zeros((len(df), 1))
-    confs = np.zeros((len(df), 1))
+    num_predicts = indices.shape[1]
+    predicts = np.zeros((len(df), num_predicts))
+    confs = np.zeros((len(df), num_predicts))
 
-    for i, (_, id, landmark_id) in enumerate(tqdm(df.itertuples(),
-                                                  total=df.shape[0])):
-        closest_id = indices[i, 0]
-        predicts[i, 0] = knn_train_df.iloc[closest_id, 1]
-        confs[i, 0] = distances[i, 0]
+    for j in range(num_predicts):
+        predicts[:, j] = knn_train_df.iloc[indices[:, j], 1]
+        confs[:, j] = distances[:, j]
 
     if not predict_test:
         # calculate the metric
