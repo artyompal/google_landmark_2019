@@ -15,38 +15,38 @@ from scipy.stats import describe
 from tqdm import tqdm
 from debug import dprint
 
-K = 20
-DIMS = 2048
-
 
 def GAP(predicts: np.ndarray, confs: np.ndarray, targets: np.ndarray) -> float:
     ''' Computes GAP@1 '''
-
-    # FIXME: handle more than one prediction
-    if len(predicts.shape) != 1:
-        dprint(predicts.shape)
-        assert False
-
-    if len(confs.shape) != 1:
-        dprint(confs.shape)
-        assert False
-
     if len(targets.shape) != 1:
         dprint(targets.shape)
         assert False
 
-    assert predicts.shape == confs.shape and confs.shape == targets.shape
+    assert predicts.shape == confs.shape
     indices = np.argsort(-confs)
 
     res, true_pos = 0.0, 0
+    num_predicts_per_sample = confs.shape[1]
+    num_targets = len(targets)
 
-    for i, (c, p, t) in enumerate(zip(confs, predicts, targets)):
+    predicts = predicts.flatten()
+    confs = confs.flatten()
+    targets = np.repeat(targets.reshape(-1, 1), num_predicts_per_sample,  axis=1)
+    dprint(targets)
+    targets = targets.flatten()
+    dprint(targets)
+
+    sorting_idx = np.argsort(-confs)
+    predicts = predicts[sorting_idx]
+    targets = targets[sorting_idx]
+
+    for i, (p, t) in enumerate(zip(tqdm(predicts), targets)):
         rel = int(p == t)
         true_pos += rel
 
         res += true_pos / (i + 1) * rel
 
-    res /= targets.shape[0] # FIXME: incorrect, not all test images depict landmarks
+    res /= num_targets # TODO: incorrect, not all test images depict landmarks
     return res
 
 if __name__ == "__main__":
@@ -91,19 +91,18 @@ if __name__ == "__main__":
         df = knn_train_df
 
     # make a prediction about classes
-    predicts = np.zeros(len(df))
-    confs = np.zeros(len(df))
+    predicts = np.zeros((len(df), 1))
+    confs = np.zeros((len(df), 1))
 
     for i, (_, id, landmark_id) in enumerate(tqdm(df.itertuples(),
                                                   total=df.shape[0])):
         closest_id = indices[i, 0]
-        predicts[i] = knn_train_df.iloc[closest_id, 1]
-        confs[i] = distances[i, 0]
+        predicts[i, 0] = knn_train_df.iloc[closest_id, 1]
+        confs[i, 0] = distances[i, 0]
 
     if not predict_test:
         # calculate the metric
-        predicts = np.array(predicts)
-        gap = GAP(predicts, confs, knn_train_df.landmark_id)
+        gap = GAP(predicts, confs, knn_train_df.landmark_id.values)
         dprint(gap)
     else:
         # generate submission
