@@ -41,7 +41,6 @@ class ImageDataset(torch.utils.data.Dataset):
 
         self.df = dataframe
         self.mode = mode
-        self.zipfile = ZipFile(f'../input/{mode}.zip')
 
         self.transforms = transforms.Compose([
             transforms.ToTensor(),
@@ -53,7 +52,7 @@ class ImageDataset(torch.utils.data.Dataset):
         ''' Returns: tuple (sample, target) '''
         filename = self.df.id.values[index]
 
-        sample = Image.open(self.zipfile.open(f'{self.mode}_64/{filename}.jpg'))
+        sample = Image.open(f'../input/{self.mode}_64/{filename}.jpg')
         assert sample.mode == 'RGB'
 
         image = np.array(sample)
@@ -93,7 +92,7 @@ def GAP(predicts: torch.Tensor, confs: torch.Tensor, targets: torch.Tensor) -> f
     res /= targets.shape[0] # FIXME: incorrect, not all test images depict landmarks
     return res
 
-class AverageMeter(object):
+class AverageMeter:
     ''' Computes and stores the average and current value '''
     def __init__(self) -> None:
         self.reset()
@@ -116,6 +115,12 @@ def load_data() -> Any:
 
     df = pd.read_csv('../input/train.csv')
     df.drop(columns='url', inplace=True)
+
+    # extract data from all zip files
+    # since I can't use zipfile object from worker processes.
+    for filename in ['../input/test.zip'] + [f'../input/train_{hex(i)[-1]}.zip' for i in range(16)]:
+        with ZipFile(filename) as zf:
+            zf.extractall('../input/')
 
     # only use classes which have at least MIN_SAMPLES_PER_CLASS samples
     counts = df.landmark_id.value_counts()
