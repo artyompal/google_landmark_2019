@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
-import numpy as np
-import pandas as pd
+import multiprocessing
 import os
 import time
+
+import numpy as np
+import pandas as pd
 
 from typing import Any, Optional, Tuple
 from zipfile import ZipFile
@@ -25,14 +27,14 @@ MIN_SAMPLES_PER_CLASS = 50
 BATCH_SIZE = 512
 LEARNING_RATE = 1e-2
 LR_STEP = 3
-LR_FACTOR = 0.2
-NUM_WORKERS = 1
-MAX_STEPS_PER_EPOCH = 100
+LR_FACTOR = 0.3
+NUM_WORKERS = multiprocessing.cpu_count()
+MAX_STEPS_PER_EPOCH = 15000
 NUM_EPOCHS = 1
 LOG_FREQ = 50
 NUM_TOP_PREDICTS = 20
 
-class ImageDataset(torch.utils.data.Dataset[np.ndarray]):
+class ImageDataset(torch.utils.data.Dataset):
     def __init__(self, dataframe: pd.DataFrame, mode: str) -> None:
         print(f'creating data loader - {mode}')
         assert mode in ['train', 'val', 'test']
@@ -51,7 +53,7 @@ class ImageDataset(torch.utils.data.Dataset[np.ndarray]):
         ''' Returns: tuple (sample, target) '''
         filename = self.df.id.values[index]
 
-        sample = Image.open(self.zipfile.open(filename + '.jpg'))
+        sample = Image.open(self.zipfile.open(f'{self.mode}_64/{filename}.jpg'))
         assert sample.mode == 'RGB'
 
         image = np.array(sample)
@@ -121,7 +123,7 @@ def load_data() -> Any:
     num_classes = selected_classes.shape[0]
     print('classes with at least N samples:', num_classes)
 
-    train_df = df.loc[df.landmark_id.isin(selected_classes)]
+    train_df = df.loc[df.landmark_id.isin(selected_classes)].copy()
     print('train_df', train_df.shape)
 
     test_df = pd.read_csv('../input/test.csv', dtype=str)
@@ -132,8 +134,9 @@ def load_data() -> Any:
     with ZipFile('../input/test.zip') as zf:
         image_list = set(zf.namelist())
 
-    test_df = test_df.loc[test_df.id.apply(lambda img: img + '.jpg' in image_list)]
+    test_df = test_df.loc[test_df.id.apply(lambda img: f'test_64/{img}.jpg' in image_list)].copy()
     print('test_df after filtering', test_df.shape)
+    assert test_df.shape[0] > 112000
 
     label_encoder = LabelEncoder()
     label_encoder.fit(train_df.landmark_id.values)
@@ -257,8 +260,9 @@ if __name__ == '__main__':
     train_loader, test_loader, label_encoder, num_classes = load_data()
 
     model = torchvision.models.resnet50(pretrained=True)
-    model.avg_pool = nn.AvgPool2d((5,10))
-    model.last_linear = nn.Linear(model.last_linear.in_features, num_classes)
+    model.avg_pool = nn.AdaptiveAvgPool2d(1)
+    model.fc = nn.Linear(model.fc.in_features, num_classes)
+    model.cuda()
 
     criterion = nn.CrossEntropyLoss()
 
@@ -273,3 +277,4 @@ if __name__ == '__main__':
 
     print('inference mode')
     generate_submission(test_loader, model, label_encoder)
+
