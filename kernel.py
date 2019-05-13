@@ -109,12 +109,9 @@ class AverageMeter:
         self.count += n
         self.avg = self.sum / self.count
 
-def load_data() -> Any:
+def load_data() -> 'Tuple[DataLoader[np.ndarray], DataLoader[np.ndarray], LabelEncoder, int]':
     torch.multiprocessing.set_sharing_strategy('file_system')
     cudnn.benchmark = True
-
-    df = pd.read_csv('../input/train.csv')
-    df.drop(columns='url', inplace=True)
 
     # extract data from all zip files
     # since I can't use zipfile object from worker processes.
@@ -125,6 +122,9 @@ def load_data() -> Any:
 
     # only use classes which have at least MIN_SAMPLES_PER_CLASS samples
     print('loading data...')
+    df = pd.read_csv('../input/train.csv')
+    df.drop(columns='url', inplace=True)
+
     counts = df.landmark_id.value_counts()
     selected_classes = counts[counts >= MIN_SAMPLES_PER_CLASS].index
     num_classes = selected_classes.shape[0]
@@ -294,4 +294,3 @@ if __name__ == '__main__':
 
     print('inference mode')
     generate_submission(test_loader, model, label_encoder)
-
