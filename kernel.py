@@ -30,7 +30,7 @@ LR_STEP = 3
 LR_FACTOR = 0.3
 NUM_WORKERS = multiprocessing.cpu_count()
 MAX_STEPS_PER_EPOCH = 15000
-NUM_EPOCHS = 1
+NUM_EPOCHS = 2 ** 32
 LOG_FREQ = 50
 NUM_TOP_PREDICTS = 20
 
@@ -75,7 +75,7 @@ def GAP(predicts: torch.Tensor, confs: torch.Tensor, targets: torch.Tensor) -> f
     assert len(targets.shape) == 1
     assert predicts.shape == confs.shape and confs.shape == targets.shape
 
-    sorted_confs, indices = torch.sort(confs, descending=True)
+    _, indices = torch.sort(confs, descending=True)
 
     confs = confs.cpu().numpy()
     predicts = predicts[indices].cpu().numpy()
@@ -118,11 +118,13 @@ def load_data() -> Any:
 
     # extract data from all zip files
     # since I can't use zipfile object from worker processes.
+    print('unpacking all images...')
     for filename in ['../input/test.zip'] + [f'../input/train_{hex(i)[-1]}.zip' for i in range(16)]:
         with ZipFile(filename) as zf:
             zf.extractall('../input/')
 
     # only use classes which have at least MIN_SAMPLES_PER_CLASS samples
+    print('loading data...')
     counts = df.landmark_id.value_counts()
     selected_classes = counts[counts >= MIN_SAMPLES_PER_CLASS].index
     num_classes = selected_classes.shape[0]
@@ -205,6 +207,9 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
                         f'GAP {avg_score.val:.4f} ({avg_score.avg:.4f})'
                         + lr_str)
 
+        if has_time_run_out():
+            break
+
     print(f' * average GAP on train {avg_score.avg:.4f}')
 
 def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, torch.Tensor,
@@ -261,7 +266,11 @@ def generate_submission(test_loader: Any, model: Any, label_encoder: Any) -> np.
 
     sample_sub.to_csv('submission.csv')
 
+def has_time_run_out() -> bool:
+    return time.time() - global_start_time > 60 * 60 * 8.5
+
 if __name__ == '__main__':
+    global_start_time = time.time()
     train_loader, test_loader, label_encoder, num_classes = load_data()
 
     model = torchvision.models.resnet50(pretrained=True)
@@ -279,6 +288,9 @@ if __name__ == '__main__':
         print('-' * 50)
         train(train_loader, model, criterion, optimizer, epoch, lr_scheduler)
         lr_scheduler.step()
+
+        if has_time_run_out():
+            break
 
     print('inference mode')
     generate_submission(test_loader, model, label_encoder)
