@@ -8,9 +8,6 @@ import numpy as np
 import pandas as pd
 
 from typing import Any, Optional, Tuple
-from zipfile import ZipFile
-
-from sklearn.preprocessing import LabelEncoder
 
 import torch
 import torch.nn as nn
@@ -19,20 +16,22 @@ import torchvision.transforms as transforms
 import torch.backends.cudnn as cudnn
 
 from torch.utils.data import TensorDataset, DataLoader, Dataset
+from sklearn.preprocessing import LabelEncoder
 from PIL import Image
 from tqdm import tqdm
 
 IN_KERNEL = os.environ.get('KAGGLE_WORKING_DIR') is not None
 MIN_SAMPLES_PER_CLASS = 50
 BATCH_SIZE = 512
-LEARNING_RATE = 1e-2
+LEARNING_RATE = 1e-3
 LR_STEP = 3
-LR_FACTOR = 0.3
+LR_FACTOR = 0.5
 NUM_WORKERS = multiprocessing.cpu_count()
 MAX_STEPS_PER_EPOCH = 15000
 NUM_EPOCHS = 2 ** 32
-LOG_FREQ = 50
+LOG_FREQ = 500
 NUM_TOP_PREDICTS = 20
+TIME_LIMIT = 9 * 60 * 60
 
 class ImageDataset(torch.utils.data.Dataset):
     def __init__(self, dataframe: pd.DataFrame, mode: str) -> None:
@@ -42,23 +41,24 @@ class ImageDataset(torch.utils.data.Dataset):
         self.df = dataframe
         self.mode = mode
 
-        self.transforms = transforms.Compose([
+        transforms_list = [transforms.RandomHorizontalFlip()] if self.mode == 'train' else []
+        transforms_list.extend([
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                   std=[0.229, 0.224, 0.225]),
         ])
+        self.transforms = transforms.Compose(transforms_list)
 
     def __getitem__(self, index: int) -> Any:
         ''' Returns: tuple (sample, target) '''
         filename = self.df.id.values[index]
 
-        sample = Image.open(f'../input/{self.mode}_64/{filename}.jpg')
+        part = 1 if self.mode == 'test' or filename[0] in '01234567' else 2
+        directory = 'test' if self.mode == 'test' else 'train_' + filename[0]
+        sample = Image.open(f'../input/google-landmarks-2019-64x64-part{part}/{directory}/{self.mode}_64/{filename}.jpg')
         assert sample.mode == 'RGB'
 
-        image = np.array(sample)
-        assert image.dtype == np.uint8
-
-        image = self.transforms(image)
+        image = self.transforms(sample)
 
         if self.mode == 'test':
             return image
@@ -83,7 +83,7 @@ def GAP(predicts: torch.Tensor, confs: torch.Tensor, targets: torch.Tensor) -> f
 
     res, true_pos = 0.0, 0
 
-    for i, (c, p, t) in enumerate(zip(confs, predicts, targets)): # type: ignore
+    for i, (c, p, t) in enumerate(zip(confs, predicts, targets)):
         rel = int(p == t)
         true_pos += rel
 
@@ -113,16 +113,9 @@ def load_data() -> 'Tuple[DataLoader[np.ndarray], DataLoader[np.ndarray], LabelE
     torch.multiprocessing.set_sharing_strategy('file_system')
     cudnn.benchmark = True
 
-    # extract data from all zip files
-    # since I can't use zipfile object from worker processes.
-    print('unpacking all images...')
-    for filename in ['../input/test.zip'] + [f'../input/train_{hex(i)[-1]}.zip' for i in range(16)]:
-        with ZipFile(filename) as zf:
-            zf.extractall('../input/')
-
     # only use classes which have at least MIN_SAMPLES_PER_CLASS samples
     print('loading data...')
-    df = pd.read_csv('../input/train.csv')
+    df = pd.read_csv('../input/google-landmarks-2019-64x64-part1/train.csv')
     df.drop(columns='url', inplace=True)
 
     counts = df.landmark_id.value_counts()
@@ -133,15 +126,13 @@ def load_data() -> 'Tuple[DataLoader[np.ndarray], DataLoader[np.ndarray], LabelE
     train_df = df.loc[df.landmark_id.isin(selected_classes)].copy()
     print('train_df', train_df.shape)
 
-    test_df = pd.read_csv('../input/test.csv', dtype=str)
+    test_df = pd.read_csv('../input/google-landmarks-2019-64x64-part1/test.csv', dtype=str)
     test_df.drop(columns='url', inplace=True)
     print('test_df', test_df.shape)
 
     # filter non-existing test images
-    with ZipFile('../input/test.zip') as zf:
-        image_list = set(zf.namelist())
-
-    test_df = test_df.loc[test_df.id.apply(lambda img: f'test_64/{img}.jpg' in image_list)].copy()
+    exists = lambda img: os.path.exists(f'../input/google-landmarks-2019-64x64-part1/test/test_64/{img}.jpg')
+    test_df = test_df.loc[test_df.id.apply(exists)].copy()
     print('test_df after filtering', test_df.shape)
     assert test_df.shape[0] > 112000
 
@@ -182,21 +173,17 @@ def train(train_loader: Any, model: Any, criterion: Any, optimizer: Any,
         if i >= num_steps:
             break
 
-        # compute output
         output = model(input_.cuda())
         loss = criterion(output, target.cuda())
 
-        # get metric
         confs, predicts = torch.max(output.detach(), dim=1)
         avg_score.update(GAP(predicts, confs, target))
 
-        # compute gradient and do SGD step
         losses.update(loss.data.item(), input_.size(0))
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
 
@@ -244,7 +231,7 @@ def inference(data_loader: Any, model: Any) -> Tuple[torch.Tensor, torch.Tensor,
     return predicts, confs, targets
 
 def generate_submission(test_loader: Any, model: Any, label_encoder: Any) -> np.ndarray:
-    sample_sub = pd.read_csv('../input/recognition_sample_submission.csv')
+    sample_sub = pd.read_csv('../input/landmark-recognition-2019/recognition_sample_submission.csv')
 
     predicts_gpu, confs_gpu, _ = inference(test_loader, model)
     predicts, confs = predicts_gpu.cpu().numpy(), confs_gpu.cpu().numpy()
@@ -267,7 +254,7 @@ def generate_submission(test_loader: Any, model: Any, label_encoder: Any) -> np.
     sample_sub.to_csv('submission.csv')
 
 def has_time_run_out() -> bool:
-    return time.time() - global_start_time > 60 * 60 * 8.5
+    return time.time() - global_start_time > TIME_LIMIT - 500
 
 if __name__ == '__main__':
     global_start_time = time.time()
@@ -280,7 +267,7 @@ if __name__ == '__main__':
 
     criterion = nn.CrossEntropyLoss()
 
-    optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=LR_STEP,
                                                    gamma=LR_FACTOR)
 

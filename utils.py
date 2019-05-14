@@ -32,7 +32,7 @@ def create_logger(filename: str) -> Any:
 
     return logger
 
-class AverageMeter(object):
+class AverageMeter:
     """Computes and stores the average and current value"""
     def __init__(self) -> None:
         self.reset()
@@ -48,4 +48,3 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
-

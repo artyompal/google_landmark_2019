@@ -3,8 +3,8 @@
 import torch
 from debug import dprint
 
-def F_score(predict: torch.tensor, label: torch.tensor, beta: int,
-            threshold: float = 0.5) -> float:
+def F_score(predict: torch.Tensor, label: torch.Tensor, beta: int,
+            threshold: float = 0.5) -> torch.Tensor:
     predict = predict > threshold
     label = label > threshold
 
