@@ -68,7 +68,7 @@ def load_data(fold: int) -> Any:
     print('val_df after class filtering', val_df.shape)
 
     test_df = pd.read_csv('../data/test.csv', dtype=str)
-    test_df.drop(columns='url', inplace=True)
+    # test_df.drop(columns='url', inplace=True)
     print('test_df', test_df.shape)
 
     test_df = test_df.loc[test_df.id.apply(lambda img: os.path.exists(os.path.join(
@@ -167,7 +167,7 @@ class Model(nn.Module):
     def __init__(self) -> None:
         super().__init__()
 
-        self.model = get_model(config.model.arch, pretrained=True)
+        self.model = get_model(config.model.arch, pretrained=not args.gen_predict)
         assert config.model.input_size % 32 == 0
 
         self.model.features[-1] = nn.AdaptiveAvgPool2d(1)
