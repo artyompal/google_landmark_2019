@@ -25,6 +25,7 @@ VERSION = os.path.splitext(os.path.basename(__file__))[0]
 class ImageDataset(torch.utils.data.Dataset):
     def __init__(self, dataframe: pd.DataFrame, path: str, mode: str,
                  image_size: int, num_classes: int, images_per_class: int = 0,
+                 input_size: int = 0, num_ttas: int = 1,
                  aug_type: str = "albu", augmentor: Any = None) -> None:
         print(f'creating data loader {VERSION} - {mode}')
         assert mode in ['train', 'val', 'test']
@@ -34,16 +35,35 @@ class ImageDataset(torch.utils.data.Dataset):
         self.path = path
         self.mode = mode
         self.image_size = image_size
+        self.input_size = input_size
+        self.num_ttas = num_ttas
         self.images_per_class = images_per_class
         self.num_classes = num_classes
         self.aug_type = aug_type
         self.augmentor = augmentor
 
-        self.transforms = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                  std=[0.229, 0.224, 0.225]),
-        ])
+        tensor = transforms.ToTensor()
+        norm = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                    std=[0.229, 0.224, 0.225])
+
+        if self.num_ttas == 1:
+            self.transforms = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                      std=[0.229, 0.224, 0.225]),
+            ])
+        elif self.num_ttas == 5:
+            self.transforms = transforms.Compose([
+                transforms.FiveCrop(self.input_size),
+                transforms.Lambda(lambda crops: torch.stack([norm(tensor(c)) for c in crops])),
+            ])
+        elif self.num_ttas == 10:
+            self.transforms = transforms.Compose([
+                transforms.TenCrop(self.input_size),
+                transforms.Lambda(lambda crops: torch.stack([norm(tensor(c)) for c in crops])),
+            ])
+        else:
+            assert False
 
     def __getitem__(self, index: int) -> Any:
         ''' Returns: tuple (sample, target) '''
@@ -66,6 +86,9 @@ class ImageDataset(torch.utils.data.Dataset):
             os.makedirs(f'../debug_images_{VERSION}/', exist_ok=True)
             Image.fromarray(image).save(f'../debug_images_{VERSION}/{index}.png')
 
+        if self.num_ttas > 1:
+            image = Image.fromarray(image)
+            
         image = self.transforms(image)
 
         if self.mode == 'test':

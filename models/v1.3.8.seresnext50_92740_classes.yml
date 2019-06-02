@@ -16,6 +16,9 @@ train:
 val:
     images_per_class: 2
 
+test:
+    batch_size: 8
+
 optimizer:
     name: 'sgd'
 
@@ -23,14 +26,14 @@ scheduler:
     name: 'cyclic_lr'
     params:
         max_lr: 0.0006      # 0.003
-        base_lr: 0.00002    # 0.0001
-        step_size_up: 4000
+        base_lr: 0.000006    # 0.0001
+        step_size_up: 3750
 
-scheduler2:
-    name: 'reduce_lr_on_plateau'
-    params:
-        factor: 0.2
-        patience: 3
+# scheduler2:
+#     name: 'reduce_lr_on_plateau'
+#     params:
+#         factor: 0.2
+#         patience: 3
 
 loss:
     name: 'cross_entropy'

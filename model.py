@@ -133,6 +133,8 @@ def load_data(fold: int) -> Any:
     if args.dataset == 'test':
         test_dataset = ImageDataset(test_df, path=config.data.test_dir, mode='test',
                                     image_size=config.model.image_size,
+                                    input_size=config.model.input_size,
+                                    num_ttas=config.test.num_ttas,
                                     num_classes=config.model.num_classes)
     else:
         train_df = pd.read_csv('../data/train.csv')
@@ -493,9 +495,13 @@ if __name__ == '__main__':
     parser.add_argument('--gen_features', help='calculate features for the given set', action='store_true')
     parser.add_argument('--summary', help='show model summary', action='store_true')
     parser.add_argument('--lr_override', help='override learning rate', type=float, default=0)
+    parser.add_argument('--num_ttas', help='override number of TTAs', type=int, default=0)
     args = parser.parse_args()
 
     config = parse_config.load(args.config, args)
+
+    if args.num_ttas:
+        config.test.num_ttas = args.num_ttas
 
     if not os.path.exists(config.experiment_dir):
         os.makedirs(config.experiment_dir)
