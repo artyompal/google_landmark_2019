@@ -8,46 +8,58 @@ import numpy as np
 import pandas as pd
 
 from tqdm import tqdm
+from debug import dprint
 
 
 sub = pd.read_csv('best.csv')
 
-with open('obj_det.pkl', 'rb') as f:
-    boxes, labels, confs = pickle.load(f)
+with open('imagenet1000.txt') as f:
+    imagenet = eval(f.read())
 
-with open('imagenet1000.json') as f:
-    imagenet = json.load(f)
+categories = list(imagenet.values())
 
-categories = list(imagenet.keys())
+with open('imagenet_classes.pkl', 'rb') as ff:
+    predicts = pickle.load(ff)
+    predicts = np.vstack(predicts)
 
+classes = np.argmax(predicts, axis=1)
+
+imagenet_classes = [categories[classes[i]] for i in range(predicts.shape[0])]
+imagenet_indices = [classes[i] for i in range(predicts.shape[0])]
+confs = [predicts[i, classes[i]] for i in range(predicts.shape[0])]
+
+MIN_CONF = 0.7
 
 for i in tqdm(range(sub.shape[0])):
     index = sub.index.values[i]
 
-    PERSON_MIN_CONF = 0.5
-    PERSON_MIN_AREA = 0.4
-    CAR_MIN_CONF = 0.5
-    CAR_MIN_AREA = 0.4
+    class_, conf = imagenet_classes[index], confs[index]
 
-    total_persons_area = 0.0
-    persons_count = 0
+    if conf < MIN_CONF:
+        continue
 
-    for L, conf, box in zip(labels[index], confs[index], boxes[index]):
-        box /= 800.0
-        area = (box[2] - box[0]) * (box[3] - box[1])
-        class_ = categories[L]
-
-        if class_ == 'person' and conf > PERSON_MIN_CONF:
-            total_persons_area += area
-            persons_count += 1
-
-        if class_ == 'car' and conf > CAR_MIN_CONF and area > CAR_MIN_AREA:
+    for c in ['warplane', 'coil', 'missile', 'conch', 'gar', 'tank',
+              'schooner', 'book jacket', 'scabbard', 'aircraft carrier',
+              'school bus', 'space shuttle', 'cannon',
+              'trilobite', 'tow truck', 'submarine', 'pickup', 'amphibian',
+              'marmot', 'mushroom', 'shield', 'French loaf',
+              'poncho', 'warthog']:
+        if class_.startswith(c + ','):
             sub.landmarks.iloc[i] = ''
 
-        # if class_ == 'airplane' and conf > CAR_MIN_CONF and area > CAR_MIN_AREA:
-        #     sub.landmarks.iloc[i] = ''
+    # for c in ['warplane', 'coil', 'missile', 'conch', 'gar', 'tank',
+    #           'schooner', 'book jacket', 'scabbard', 'aircraft carrier',
+    #           'school bus', 'trolley bus', 'space shuttle', 'cannon',
+    #           'trilobite', 'tow truck', 'submarine', 'pickup', 'amphibian',
+    #           'marmot', 'mushroom', 'passenger car', 'shield', 'French loaf',
+    #           'poncho', 'warthog']:
+    #     if class_.startswith(c + ','):
+    #         sub.landmarks.iloc[i] = ''
 
-    if total_persons_area > PERSON_MIN_AREA:
+    if imagenet_indices[index] < 400:
+        sub.landmarks.iloc[i] = ''
+
+    if imagenet_indices[index] >= 985:
         sub.landmarks.iloc[i] = ''
 
 

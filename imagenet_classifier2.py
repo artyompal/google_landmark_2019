@@ -16,14 +16,12 @@ import torchvision
 import torchvision.transforms as transforms
 import torch.backends.cudnn as cudnn
 
-from pytorchcv.model_provider import get_model
-
 from torch.utils.data import TensorDataset, DataLoader, Dataset
 from PIL import Image
 from tqdm import tqdm
 
 IN_KERNEL = os.environ.get('KAGGLE_WORKING_DIR') is not None
-BATCH_SIZE = 16
+BATCH_SIZE = 4
 NUM_WORKERS = multiprocessing.cpu_count()
 
 
@@ -70,16 +68,17 @@ if __name__ == '__main__':
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE,
                              shuffle=False, num_workers=NUM_WORKERS)
 
-    model = get_model('seresnext50_32x4d').cuda()
+    model = torchvision.models.resnet50(pretrained=True)
+    model = model.cuda()
     model.eval()
 
     results = []
-    softmax = nn.Softmax()
+    softmax = nn.Softmax(dim=1)
 
     with torch.no_grad():
         for i, input_ in enumerate(tqdm(test_loader, disable=IN_KERNEL)):
             output = model(input_.cuda())
-            output = softmax(output, dim=1)
+            output = softmax(output)
             results.append(output.cpu().numpy())
 
     with open('imagenet_classes.pkl', 'wb') as f:
