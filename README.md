@@ -2,7 +2,13 @@
 
 This is a solution to the Kaggle competition from Google. It's a single model (SE-ResNext50), single fold. My code is very similar to my kernel: https://www.kaggle.com/artyomp/resnet50-baseline. I used 224x224 crops from 256x256 images. I trained only on classes with >= 10 samples (92740 classes). Surprisingly, it wasn't much slower than training on 18k or 35k classes (maybe 20% slower).
 
-This is the config of my model: https://github.com/artyompal/google_landmark_2019/blob/master/models/v1.3.8.seresnext50_92740_classes.yml So, it adds a bottleneck layer with 1024 neurons, SGD with CyclicLR and rectangular crops from https://arxiv.org/pdf/1812.01187.pdf.
+How to start training:
+`./model.py --config models/v1.3.8.seresnext50_92740_classes.yml`
+
+Generating a submission:
+`./model.py --config models/v1.3.8.seresnext50_92740_classes.yml --weights saved_pytorch_model.pth --gen_predict`
+
+This is the config of the best model: https://github.com/artyompal/google_landmark_2019/blob/master/models/v1.3.8.seresnext50_92740_classes.yml So, it adds a bottleneck layer with 1024 neurons, SGD with CyclicLR and rectangular crops from https://arxiv.org/pdf/1812.01187.pdf.
 
 It resulted in 0.128 on public LB after almost 5 days of training on a single 1080Ti.
 
