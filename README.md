@@ -16,7 +16,7 @@ Obviously, such a low score was caused by both a noisy train set and a noisy tes
 
 The first stage of cleaning was just No Landmark Detector from this kernel: https://www.kaggle.com/rsmits/keras-landmark-or-non-landmark-identification. I just got rid of predictions where any of top3 results were "not landmark".
 
-The second stage. I noticed that there's a lot of portraits, selfies, and pictures of cars in the test set. So I took the pretrained Fast R-CNN from the new TorchVision release (checkout object_detection.py) and got rid of images with too many humans or cars (confidence >0.5, total area > 0.4). Check this out: https://github.com/artyompal/google_landmark_2019/blob/master/patch_sub2.py
+The second stage. I noticed that there's a lot of portraits, selfies, and pictures of cars in the test set. So I took the pretrained Faster R-CNN from the new TorchVision release (checkout object_detection.py) and got rid of images with too many humans or cars (confidence >0.5, total area > 0.4). Check this out: https://github.com/artyompal/google_landmark_2019/blob/master/patch_sub2.py
 
 The third stage. I noticed that there's a lot of random images: dogs, helicopters, flowers and so on. So I took a pretrained ImageNet classifier. I used ResNet50 (I wanted to use something better, but my GPUs were busy doing something else, so I needed a simple network; ideally, I'd take some smarter model). It's in the image_classifier2.py. So I rejected images with any of those classes and confidence > 0.7 (https://github.com/artyompal/google_landmark_2019/blob/master/patch_sub3.py)
 
