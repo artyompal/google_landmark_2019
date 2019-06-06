@@ -74,12 +74,12 @@ if __name__ == '__main__':
     model.eval()
 
     results = []
-    softmax = nn.Softmax()
+    softmax = nn.Softmax(dim=1)
 
     with torch.no_grad():
         for i, input_ in enumerate(tqdm(test_loader, disable=IN_KERNEL)):
             output = model(input_.cuda())
-            output = softmax(output, dim=1)
+            output = softmax(output)
             results.append(output.cpu().numpy())
 
     with open('imagenet_classes.pkl', 'wb') as f:
