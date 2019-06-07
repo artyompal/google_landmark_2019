@@ -8,6 +8,9 @@ How to start training:
 Generating a submission:
 `./model.py --config models/v1.3.8.seresnext50_92740_classes.yml --weights saved_pytorch_model.pth --gen_predict`
 
+Cleaning a submision:
+`./patch_sub.py sub.csv` or `./patch_sub2.py sub.csv` or `./patch_sub3.py sub.csv`. Use them all for the best effect.
+
 This is the config of the best model: https://github.com/artyompal/google_landmark_2019/blob/master/models/v1.3.8.seresnext50_92740_classes.yml So, it adds a bottleneck layer with 1024 neurons, SGD with CyclicLR and rectangular crops from https://arxiv.org/pdf/1812.01187.pdf.
 
 It resulted in 0.128 on public LB after almost 5 days of training on a single 1080Ti.
