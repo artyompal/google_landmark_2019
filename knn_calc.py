@@ -1,5 +1,5 @@
 #!/usr/bin/python3.6
-""" For every image from test set, searches for the top-100 closes landmarks. """
+""" For every image from the test set, searches for the top-20 closest images from the train set. """
 
 import os
 import sys
