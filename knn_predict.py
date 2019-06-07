@@ -1,5 +1,5 @@
 #!/usr/bin/python3.6
-""" For every image from test set, searches for the top-100 closes landmarks. """
+""" Makes predictions basing on distances, calculated by KNN. """
 
 import os
 import sys
