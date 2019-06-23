@@ -75,12 +75,17 @@ if __name__ == "__main__":
     dprint(indices.shape)
     dprint(np.max(indices.flatten()))
 
+    if not predict_test:
+        distances = np.delete(distances, 0, axis=1)
+        indices = np.delete(indices, 0, axis=1)
+
     # load dataframe
     full_train_df = pd.read_csv('../data/train.csv')
     full_train_df.drop(columns='url', inplace=True)
-    train_df = pd.read_csv('../data/splits/50_samples_18425_classes_fold_0_train.csv')
-    train_mask = ~full_train_df.id.isin(train_df.id)
-    knn_train_df = full_train_df.loc[train_mask]
+    # train_df = pd.read_csv('../data/splits/50_samples_18425_classes_fold_0_train.csv')
+    train_df = pd.read_csv('../data/splits/10_samples_92740_classes_fold_0_train.csv')
+    val_dataset_mask = ~full_train_df.id.isin(train_df.id)
+    knn_train_df = full_train_df.loc[val_dataset_mask]
     dprint(knn_train_df.shape)
 
     if predict_test:
@@ -92,7 +97,7 @@ if __name__ == "__main__":
         df = knn_train_df
 
     # make a prediction about classes
-    num_predicts = indices.shape[1]
+    num_predicts = 1 # indices.shape[1]
     predicts = np.zeros((len(df), num_predicts), dtype=int)
     confs = np.zeros((len(df), num_predicts))
 
@@ -101,24 +106,24 @@ if __name__ == "__main__":
         predicts[:, i] = knn_train_df.iloc[indices[:, i], 1]
         confs[:, i] = distances[:, i]
 
-    print('removing duplicates')
-    for i in tqdm(range(confs.shape[0])):
-        seen: Set[int] = set()
-        filtered_pred, filtered_confs = [], []
+    # print('removing duplicates')
+    # for i in tqdm(range(confs.shape[0])):
+    #     seen: Set[int] = set()
+    #     filtered_pred, filtered_confs = [], []
+    #
+    #     for j, (p, c) in enumerate(zip(predicts[i], confs[i])):
+    #         if p not in seen:
+    #             seen.add(p)
+    #             filtered_pred.append(p)
+    #             filtered_confs.append(c)
+    #
+    #     predicts[i, :len(filtered_pred)] = filtered_pred
+    #     predicts[i, len(filtered_pred):] = -1
+    #
+    #     confs[i, :len(filtered_confs)] = filtered_confs
+    #     confs[i, len(filtered_confs):] = 0
 
-        for j, (p, c) in enumerate(zip(predicts[i], confs[i])):
-            if p not in seen:
-                seen.add(p)
-                filtered_pred.append(p)
-                filtered_confs.append(c)
-
-        predicts[i, :len(filtered_pred)] = filtered_pred
-        predicts[i, len(filtered_pred):] = -1
-
-        confs[i, :len(filtered_confs)] = filtered_confs
-        confs[i, len(filtered_confs):] = 0
-
-    # print('grouping predicts by class')
+    # print('calculating class centroids')
     # for i in tqdm(range(confs.shape[0])):
     #     preds: DefaultDict[int, List[float]] = defaultdict(list)
     #

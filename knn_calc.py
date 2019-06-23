@@ -169,7 +169,8 @@ if __name__ == "__main__":
 
     full_train_df = pd.read_csv('../data/train.csv')
 
-    train_df = pd.read_csv('../data/splits/50_samples_18425_classes_fold_0_train.csv')
+    # train_df = pd.read_csv('../data/splits/50_samples_18425_classes_fold_0_train.csv')
+    train_df = pd.read_csv('../data/splits/10_samples_92740_classes_fold_0_train.csv')
     train_mask = ~full_train_df.id.isin(train_df.id)
     dprint(train_mask.shape)
     dprint(sum(train_mask))
@@ -210,8 +211,8 @@ if __name__ == "__main__":
 
             base_index += train_features.shape[0]
 
-        best_indices = np.delete(best_indices, 0, axis=1)
-        best_distances = np.delete(best_distances, 0, axis=1)
+        # best_indices = np.delete(best_indices, 0, axis=1)
+        # best_distances = np.delete(best_distances, 0, axis=1)
 
         dprint(best_indices.shape)
         dprint(best_indices)

@@ -17,7 +17,8 @@ val:
     images_per_class: 2
 
 test:
-    batch_size: 8
+    batch_size: 64 # 8
+    num_predicts: 20
 
 optimizer:
     name: 'sgd'
