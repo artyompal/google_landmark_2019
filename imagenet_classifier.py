@@ -70,7 +70,7 @@ if __name__ == '__main__':
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE,
                              shuffle=False, num_workers=NUM_WORKERS)
 
-    model = get_model('seresnext50_32x4d').cuda()
+    model = get_model('seresnext50_32x4d', pretrained=True).cuda()
     model.eval()
 
     results = []
