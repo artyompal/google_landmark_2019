@@ -83,18 +83,21 @@ if __name__ == "__main__":
     # load dataframe
     full_train_df = pd.read_csv('../data/train.csv')
     full_train_df.drop(columns='url', inplace=True)
-    train_df = pd.read_csv('../data/splits/10_samples_92740_classes_fold_0_train.csv')
-    val_dataset_mask = ~full_train_df.id.isin(train_df.id)
-    knn_train_df = full_train_df.loc[val_dataset_mask]
-    dprint(knn_train_df.shape)
+    # train_df = pd.read_csv('../data/splits/10_samples_92740_classes_fold_0_train.csv')
+    # val_dataset_mask = ~full_train_df.id.isin(train_df.id)
+    # knn_train_df = full_train_df.loc[val_dataset_mask]
+    # dprint(knn_train_df.shape)
+
+    # Why do I remove 80% of images from the train set?
 
     if predict_test:
         df = pd.read_csv('../data/test.csv')
-        df = df.loc[df.id.apply(lambda img: os.path.exists(os.path.join(
-            f'../data/test/{img}.jpg')))]
+        # df = df.loc[df.id.apply(lambda img: os.path.exists(os.path.join(
+        #     f'../data/test/{img}.jpg')))]
         print('test df after filtering', df.shape)
     else:
-        df = knn_train_df
+        # df = knn_train_df
+        df = full_train_df
 
     # make a prediction about classes
     num_predicts = 1 # indices.shape[1]
@@ -107,11 +110,11 @@ if __name__ == "__main__":
         dprint(idx)
         # dprint(np.sort(idx))
 
-        if predict_test:
-            predicts[:, i] = full_train_df.iloc[idx, 1]
-        else:
-            # WTF? Why are we not using same indices?
-            predicts[:, i] = knn_train_df.iloc[idx, 1]
+        # if predict_test:
+        predicts[:, i] = full_train_df.iloc[idx, 1]
+        # else:
+        #     # WTF? Why are we not using same indices?
+        #     predicts[:, i] = knn_train_df.iloc[idx, 1]
 
         confs[:, i] = distances[:, i]
 
@@ -131,7 +134,7 @@ if __name__ == "__main__":
 
     if not predict_test:
         print('calculating GAP')
-        gap = GAP(predicts, confs, knn_train_df.landmark_id.values)
+        gap = GAP(predicts, confs, df.landmark_id.values)
         dprint(gap)
     else:
         print('generating submission')

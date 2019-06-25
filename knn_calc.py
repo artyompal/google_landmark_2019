@@ -49,6 +49,7 @@ def search_against_fragment(train_features: np.ndarray, test_features: np.ndarra
     distances, index = index_flat.search(test_features, K)  # actual search
     dprint(index)
     dprint(distances)
+    dprint(describe(index.flatten()))
     dprint(describe(distances.flatten()))
     return index, distances
 
@@ -80,6 +81,7 @@ def merge_results(index1: np.ndarray, distances1: np.ndarray, index2: np.ndarray
     print("best_indices", best_indices.shape, "best_distances", best_distances.shape)
     dprint(best_indices)
     dprint(best_distances)
+    dprint(describe(best_indices.flatten()))
     return best_indices, best_distances
 
 def load_features(filename: str) -> np.ndarray:
@@ -97,27 +99,27 @@ class DatasetIter(Iterator[np.ndarray]):
     def __init__(self, dataset_parts: 'DatasetParts') -> None:
         self.files = dataset_parts.files
         self.train_files = iter(dataset_parts.files)
-        self.subset_mask = dataset_parts.subset_mask
+        # self.subset_mask = dataset_parts.subset_mask
         self.base_offset = 0
 
     def __next__(self) -> np.ndarray:
         features = load_features(next(self.train_files))
         fragment_size = features.shape[0]
 
-        if self.subset_mask is not None:
-            part_mask = self.subset_mask[self.base_offset : self.base_offset + fragment_size]
-            features = features[part_mask]
+        # if self.subset_mask is not None:
+        #     part_mask = self.subset_mask[self.base_offset : self.base_offset + fragment_size]
+        #     features = features[part_mask]
 
         self.base_offset += fragment_size
         return features
 
 class DatasetParts(Iterable[DatasetIter]):
     ''' A collection that reads features by parts. '''
-    def __init__(self, df: pd.DataFrame, subset_mask: Optional[pd.Series],
+    def __init__(self, df: pd.DataFrame, # subset_mask: Optional[pd.Series],
                  files: List[str]) -> None:
         self.df = df
         self.files = files
-        self.subset_mask = subset_mask
+        # self.subset_mask = subset_mask
 
     def __iter__(self) -> DatasetIter:
         return DatasetIter(self)
@@ -169,11 +171,11 @@ if __name__ == "__main__":
 
     full_train_df = pd.read_csv('../data/train.csv')
 
-    # train_df = pd.read_csv('../data/splits/50_samples_18425_classes_fold_0_train.csv')
-    train_df = pd.read_csv('../data/splits/10_samples_92740_classes_fold_0_train.csv')
-    train_mask = ~full_train_df.id.isin(train_df.id)
-    dprint(train_mask.shape)
-    dprint(sum(train_mask))
+    # # train_df = pd.read_csv('../data/splits/50_samples_18425_classes_fold_0_train.csv')
+    # train_df = pd.read_csv('../data/splits/10_samples_92740_classes_fold_0_train.csv')
+    # train_mask = ~full_train_df.id.isin(train_df.id)
+    # dprint(train_mask.shape)
+    # dprint(sum(train_mask))
 
     if predict_test:
         test_df = pd.read_csv('../data/test.csv')
@@ -185,8 +187,8 @@ if __name__ == "__main__":
         print("initializing CUDA")
         res = faiss.StandardGpuResources()
 
-    train_dataset_parts = DatasetParts(full_train_df, train_mask, train_fnames)
-    test_dataset_parts = DatasetParts(test_df, None, [test_fname]) \
+    train_dataset_parts = DatasetParts(full_train_df, train_fnames)
+    test_dataset_parts = DatasetParts(test_df, [test_fname]) \
                             if predict_test else train_dataset_parts
     total_best_indices, total_best_distances = None, None
 

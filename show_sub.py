@@ -14,6 +14,8 @@ sub = pd.read_csv(sys.argv[1])
 fig = plt.figure(figsize = (16, 16))
 N = 5
 samples = sub.loc[~sub.landmarks.isnull()].sample(N)
+# samples = sub.loc[~sub.landmarks.isnull()].iloc[:N]
+dprint(samples)
 
 train_df = pd.read_csv('../data/train.csv')
 originals = train_df.groupby('landmark_id').first()
@@ -22,11 +24,13 @@ dprint(originals.shape)
 dprint(originals)
 
 for i in range(samples.shape[0]):
+    print('-' * 80)
     img, predict = samples.iloc[i]
     dprint(img)
     dprint(predict)
 
     cls_ = int(predict.split()[0])
+    dprint(cls_)
     orig = originals[cls_]
     dprint(orig)
 
