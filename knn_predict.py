@@ -33,15 +33,16 @@ def GAP(predicts: np.ndarray, confs: np.ndarray, targets: np.ndarray) -> float:
     predicts = predicts.flatten()
     confs = confs.flatten()
     targets = np.repeat(targets.reshape(-1, 1), num_predicts_per_sample,  axis=1)
-    dprint(targets)
     targets = targets.flatten()
+
+    dprint(predicts)
     dprint(targets)
 
     sorting_idx = np.argsort(-confs)
     predicts = predicts[sorting_idx]
     targets = targets[sorting_idx]
 
-    for i, (p, t) in enumerate(zip(tqdm(predicts), targets)):
+    for i, (p, t) in enumerate(zip(predicts, targets)):
         rel = int(p == t)
         true_pos += rel
 
@@ -82,7 +83,6 @@ if __name__ == "__main__":
     # load dataframe
     full_train_df = pd.read_csv('../data/train.csv')
     full_train_df.drop(columns='url', inplace=True)
-    # train_df = pd.read_csv('../data/splits/50_samples_18425_classes_fold_0_train.csv')
     train_df = pd.read_csv('../data/splits/10_samples_92740_classes_fold_0_train.csv')
     val_dataset_mask = ~full_train_df.id.isin(train_df.id)
     knn_train_df = full_train_df.loc[val_dataset_mask]
@@ -101,27 +101,19 @@ if __name__ == "__main__":
     predicts = np.zeros((len(df), num_predicts), dtype=int)
     confs = np.zeros((len(df), num_predicts))
 
-    print('copying predictions')
     for i in range(num_predicts):
-        predicts[:, i] = knn_train_df.iloc[indices[:, i], 1]
-        confs[:, i] = distances[:, i]
+        idx = indices[:, i]
+        dprint(describe(idx))
+        dprint(idx)
+        # dprint(np.sort(idx))
 
-    # print('removing duplicates')
-    # for i in tqdm(range(confs.shape[0])):
-    #     seen: Set[int] = set()
-    #     filtered_pred, filtered_confs = [], []
-    #
-    #     for j, (p, c) in enumerate(zip(predicts[i], confs[i])):
-    #         if p not in seen:
-    #             seen.add(p)
-    #             filtered_pred.append(p)
-    #             filtered_confs.append(c)
-    #
-    #     predicts[i, :len(filtered_pred)] = filtered_pred
-    #     predicts[i, len(filtered_pred):] = -1
-    #
-    #     confs[i, :len(filtered_confs)] = filtered_confs
-    #     confs[i, len(filtered_confs):] = 0
+        if predict_test:
+            predicts[:, i] = full_train_df.iloc[idx, 1]
+        else:
+            # WTF? Why are we not using same indices?
+            predicts[:, i] = knn_train_df.iloc[idx, 1]
+
+        confs[:, i] = distances[:, i]
 
     # print('calculating class centroids')
     # for i in tqdm(range(confs.shape[0])):

@@ -169,7 +169,8 @@ class Model(nn.Module):
     def __init__(self) -> None:
         super().__init__()
 
-        self.model = get_model(config.model.arch, pretrained=not args.gen_predict)
+        self.model = get_model(config.model.arch,
+                               pretrained=not (args.gen_predict or args.gen_features))
         assert config.model.input_size % 32 == 0
 
         self.model.features[-1] = nn.AdaptiveAvgPool2d(1)
