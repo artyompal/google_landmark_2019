@@ -2,6 +2,7 @@
 ''' Patches the submission. '''
 
 import pickle
+import sys
 
 import numpy as np
 import pandas as pd
@@ -9,7 +10,11 @@ import pandas as pd
 from tqdm import tqdm
 
 
-sub = pd.read_csv('best.csv')
+if len(sys.argv) != 3:
+    print(f'usage: {sys.argv[0]} dest.csv source.csv')
+    sys.exit()
+
+sub = pd.read_csv(sys.argv[2])
 
 with open('obj_det.pkl', 'rb') as f:
     boxes, labels, confs = pickle.load(f)
@@ -60,4 +65,4 @@ for i in tqdm(range(sub.shape[0])):
         sub.landmarks.iloc[i] = ''
 
 
-sub.to_csv('filtered.csv', index=False)
+sub.to_csv(sys.argv[1], index=False)
