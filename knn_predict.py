@@ -88,15 +88,12 @@ if __name__ == "__main__":
     # knn_train_df = full_train_df.loc[val_dataset_mask]
     # dprint(knn_train_df.shape)
 
-    # Why do I remove 80% of images from the train set?
-
     if predict_test:
         df = pd.read_csv('../data/test.csv')
         # df = df.loc[df.id.apply(lambda img: os.path.exists(os.path.join(
         #     f'../data/test/{img}.jpg')))]
         print('test df after filtering', df.shape)
     else:
-        # df = knn_train_df
         df = full_train_df
 
     # make a prediction about classes
@@ -112,10 +109,6 @@ if __name__ == "__main__":
 
         # if predict_test:
         predicts[:, i] = full_train_df.iloc[idx, 1]
-        # else:
-        #     # WTF? Why are we not using same indices?
-        #     predicts[:, i] = knn_train_df.iloc[idx, 1]
-
         confs[:, i] = distances[:, i]
 
     # print('calculating class centroids')
