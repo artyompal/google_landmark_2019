@@ -97,21 +97,19 @@ if __name__ == "__main__":
         df = full_train_df
 
     # make a prediction about classes
-    num_predicts = 1 # indices.shape[1]
+    num_predicts = indices.shape[1]
     predicts = np.zeros((len(df), num_predicts), dtype=int)
     confs = np.zeros((len(df), num_predicts))
 
     for i in range(num_predicts):
         idx = indices[:, i]
-        dprint(describe(idx))
-        dprint(idx)
-        # dprint(np.sort(idx))
 
-        # if predict_test:
         predicts[:, i] = full_train_df.iloc[idx, 1]
         confs[:, i] = distances[:, i]
 
     # print('calculating class centroids')
+    # best_predicts, best_confs = [], []
+    #
     # for i in tqdm(range(confs.shape[0])):
     #     preds: DefaultDict[int, List[float]] = defaultdict(list)
     #
@@ -122,8 +120,17 @@ if __name__ == "__main__":
     #         predicts[i, j] = pred
     #         confs[i, j] = np.mean(conf)
     #
-    #     predicts[i, len(preds):] = -1
-    #     confs[i, len(preds):] = 0
+    #     centroids = [(class_, np.mean(distances)) for class_, distances in preds.items()]
+    #     best = max(centroids, key=lambda x: x[1])
+    #
+    #     best_predicts.append(best[0])
+    #     best_confs.append(best[1])
+    #
+    # predicts = np.array(best_predicts).reshape(-1, 1)
+    # confs = np.array(best_confs).reshape(-1, 1)
+
+    predicts = predicts[:, 0].reshape(-1, 1)
+    confs = confs[:, 0].reshape(-1, 1)
 
     if not predict_test:
         print('calculating GAP')
